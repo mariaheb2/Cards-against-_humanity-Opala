@@ -1,11 +1,16 @@
-package cards_against_humanity.models;
+package cards_against_humanity.models.enums;
 
 public enum GameState {
     WAITING_PLAYERS,
     STARTING,
     ROUND_STARTED,
+    DISTRIBUITING_CARDS,
     PLAYERS_PLAYING,
+    COLECTING_RESPONSES,
+    UPDATING_SCORE,
+    SELECTING_JUDGE,
     JUDGE_SELECTING,
     ROUND_FINISHED,
+    CHECKGAME_FINISHED,
     GAME_FINISHED
 }
