@@ -32,7 +32,7 @@ public class TcpServer {
     public TcpServer(ServerConfig config){
         this.config = config;
         this.registry = new ClientRegistry();
-        this.handlerFactory = new ClientHandlerFactory(registry)
+        this.handlerFactory = new ClientHandlerFactory(registry, config);
     }
 
 

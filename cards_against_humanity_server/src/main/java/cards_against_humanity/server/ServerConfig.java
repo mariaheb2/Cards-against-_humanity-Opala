@@ -55,5 +55,63 @@ public final class ServerConfig{
 
     }
 
+    @Deprecated
+    public static final String CHARSET = DEFAULT_CHARSET;
+
+    @Override
+    public String toString(){
+        return "ServerConfig{" +
+                "port=" + port +
+                ", maxConnection=" + maxConnection +
+                ", threadPoolSize=" + threadPoolSize +
+                ", backlog=" + backlog +
+                ", charset='" + charset + '\'' +
+                '}';
+    }
+
+    private static Properties loadProperties() {
+        Properties props = new Properties();
+        try (InputStream is = ServerConfig.class
+                .getClassLoader()
+                .getResourceAsStream(CONFIG_FILE)) {
+            if (is == null) {
+                LOGGER.warning("Config file not found on classpath: "
+                        + CONFIG_FILE + " — using defaults.");
+                return props;
+            }
+            props.load(is);
+            LOGGER.info("Loaded server configuration from " + CONFIG_FILE);
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Failed to read " + CONFIG_FILE + " — using defaults.", e);
+        }
+        return props;
+    }
+
+    private static int parseInt(Properties props, String key, int defaultValue) {
+        String value = props.getProperty(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            LOGGER.warning("Invalid integer for key '" + key + "': '" + value
+                    + "' — using default " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public int getMaxConnection() {
+        return maxConnection;
+    }
+
+    public String getCharset() {
+        return charset;
+    }
+
 
 }
