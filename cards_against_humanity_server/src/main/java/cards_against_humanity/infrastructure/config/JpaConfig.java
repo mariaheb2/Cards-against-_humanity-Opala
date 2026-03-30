@@ -8,7 +8,7 @@ import java.util.logging.Logger;
 public class JpaConfig {
 
     private static final Logger LOGGER = Logger.getLogger(JpaConfig.class.getName());
-    private static final String PERSISTENCE_UNIT_NAME = "cardsPU";
+    private static final String PERSISTENCE_UNIT_NAME = "cards_against_humans";
     private static final EntityManagerFactory emf = Persistence.createEntityManagerFactory(PERSISTENCE_UNIT_NAME);
 
     public static EntityManager createEntityManager() {

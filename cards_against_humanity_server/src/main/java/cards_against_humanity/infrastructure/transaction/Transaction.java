@@ -8,25 +8,19 @@ import java.util.function.Function;
 import cards_against_humanity.infrastructure.config.JpaConfig;
 
 public class Transaction {
-
-    private final EntityManager entityManager;
-
-    public Transaction() {
-        this.entityManager = JpaConfig.createEntityManager();
-    }
-
     public <T> T execute(Function<EntityManager, T> action) {
-        EntityTransaction tx = entityManager.getTransaction();
+        EntityManager em = JpaConfig.createEntityManager();
+        EntityTransaction tx = em.getTransaction();
         try {
             tx.begin();
-            T result = action.apply(entityManager);
+            T result = action.apply(em);
             tx.commit();
             return result;
         } catch (RuntimeException e) {
             if (tx.isActive()) tx.rollback();
             throw e;
         } finally {
-            entityManager.close();
+            em.close();
         }
     }
 

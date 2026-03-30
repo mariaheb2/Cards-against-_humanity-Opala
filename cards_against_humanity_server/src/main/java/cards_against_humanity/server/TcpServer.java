@@ -10,6 +10,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import cards_against_humanity.application.service.AuthService;
+import cards_against_humanity.domain.repository.UserRepository;
+import cards_against_humanity.domain.service.auth.PasswordEncoder;
+import cards_against_humanity.infrastructure.persistence.JpaUserRepository;
+import cards_against_humanity.infrastructure.security.BCryptPasswordEncoder;
+
 public class TcpServer {
 
     private static final Logger LOGGER = Logger.getLogger(TcpServer.class.getName());
@@ -24,16 +30,28 @@ public class TcpServer {
     private volatile boolean running = false;
 
     //Creates a server with default configuration
-    public TcpServer(){
+     public TcpServer() {
         this(new ServerConfig());
     }
 
-    //Creates a server with supplied configuration
-    public TcpServer(ServerConfig config){
+    // Construtor que recebe apenas ServerConfig (cria AuthService padrão)
+    public TcpServer(ServerConfig config) {
+        this(config, createDefaultAuthService());
+    }
+
+    // Construtor completo com injeção de dependência
+    public TcpServer(ServerConfig config, AuthService authService) {
         this.config = config;
         this.registry = new ClientRegistry();
-        this.handlerFactory = new ClientHandlerFactory(registry, config);
+        this.handlerFactory = new ClientHandlerFactory(registry, config, authService);
     }
+
+    private static AuthService createDefaultAuthService() {
+        UserRepository userRepository = new JpaUserRepository();
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+        return new AuthService(userRepository, passwordEncoder);
+    }
+
 
     // Binds the server socket and starts the accept Loop in a daemon thread - the server runs in background threads    
     public void start() throws IOException{
