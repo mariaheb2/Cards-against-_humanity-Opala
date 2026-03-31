@@ -24,4 +24,15 @@ public class ClientRegistry{
         LOGGER.info("Unregistered client " + clientId + " | Active connections: " + clients.size());
     }
 
+    // Returns the number of currently connected clients
+    public int getConnectionCount(){
+        return clients.size();
+    }
+
+    // Returns an unmodifiable view of all active handlers
+    public Collection<ClientHandler> getClients(){
+        return Collections.unmodifiableCollection(clients.values());
+    }
+
+
 }

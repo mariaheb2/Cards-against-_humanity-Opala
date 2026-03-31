@@ -113,5 +113,14 @@ public final class ServerConfig{
         return charset;
     }
 
+    public int getThreadPoolSize() {
+        return threadPoolSize;
+    }
+
+    public int getBacklog() {
+        return backlog;
+    }
+
+
 
 }
