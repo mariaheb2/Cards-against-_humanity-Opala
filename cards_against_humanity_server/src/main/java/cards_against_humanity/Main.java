@@ -1,17 +1,45 @@
 package cards_against_humanity;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
-public class Main {
-    public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        System.out.printf("Hello and welcome!");
+import cards_against_humanity.server.ServerConfig;
+import cards_against_humanity.server.TcpServer;
+import java.io.IOException;
+import java.util.logging.Logger;
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            System.out.println("i = " + i);
+/**
+ * Application entry point.
+ *
+ * <p>
+ * Boots the TCP server using settings from
+ * {@code src/main/resources/config/config.properties} and registers a JVM
+ * shutdown hook so the server stops gracefully on Ctrl+C or SIGTERM.
+ * </p>
+ */
+public class Main {
+
+    private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
+
+    public static void main(String[] args) {
+        ServerConfig config = new ServerConfig();
+        TcpServer server = new TcpServer(config);
+
+        // Shutdown on Ctrl+C
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Shutdown signal received — stopping server...");
+            server.stop();
+        }, "shutdown-hook"));
+
+        try {
+            server.start();
+            LOGGER.info("Server is running on port " + config.getPort() + ". Press Ctrl+C to stop.");
+
+            // Keep the main thread alive while the accept loop runs in its daemon thread.
+            Thread.currentThread().join();
+
+        } catch (IOException e) {
+            LOGGER.severe("Failed to start server: " + e.getMessage());
+            System.exit(1);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

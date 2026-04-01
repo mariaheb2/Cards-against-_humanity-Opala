@@ -120,6 +120,30 @@ public class TcpServer {
     }
 
 
+    public boolean isRunning() {
+        return running;
+    }
+
+    public ServerConfig getConfig() {
+        return config;
+    }
+
+    public ClientRegistry getRegistry() {
+        return registry;
+    }
+
+    public int getActiveConnections() {
+        return registry.getConnectionCount();
+    }
+
+
+    // Returns the actual TCP port the server is listening on 
+    public int getActualPort() {
+        if (serverSocket == null || serverSocket.isClosed()) {
+            return -1;
+        }
+        return serverSocket.getLocalPort();
+    }
 
 
 

@@ -23,11 +23,11 @@ public class ClientHandler implements Runnable {
     private PrintWriter out;
     private BufferedReader in;
 
-    public ClientHandler(Socket socket, ClientRegistry registry){
+    public ClientHandler(Socket socket, ClientRegistry registry) {
         this(socket, registry, ServerConfig.DEFAULT_CHARSET);
     }
 
-    public ClientHandler(Socket socket, ClientRegistry registry, String charset){
+    public ClientHandler(Socket socket, ClientRegistry registry, String charset) {
         this.clientId = UUID.randomUUID().toString();
         this.socket = socket;
         this.registry = registry;
@@ -36,44 +36,48 @@ public class ClientHandler implements Runnable {
 
     @Override
     public void run() {
-        LOGGER.info("[" + clientId + "] Connected from "
-                + socket.getInetAddress().getHostAddress()
-                + ":" + socket.getPort());
-        try{
+        LOGGER.info("[" + clientId + "] Connected from " + socket.getInetAddress().getHostAddress() + ":"
+                + socket.getPort());
+        try {
             openStreams();
             registry.register(clientId, this);
             sendWelcome();
             readLoop();
-        } catch (IOException e){
+        } catch (IOException e) {
             LOGGER.log(Level.WARNING, "[" + clientId + "] I/O error: " + e.getMessage(), e);
         } finally {
             cleanup();
         }
     }
 
-    private void openStreams() throws IOException{
+    private void openStreams() throws IOException {
         out = new PrintWriter(socket.getOutputStream(), true);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream(), charset));
     }
 
-    public void send(String message){
+    // Sends a raw JSON string to the client
+    public void send(String message) {
         if (out != null && !socket.isClosed()) {
             out.println(message);
         }
     }
 
+    // Greetings to new clients
     private void sendWelcome() {
         send("{\"type\":\"CONNECTED\",\"payload\":{\"clientId\":\"" + clientId + "\"}}");
         LOGGER.fine("[" + clientId + "] Welcome message sent.");
     }
 
-
     public String getClientId() {
         return clientId;
     }
 
+    public boolean isConnected() {
+        return socket != null && !socket.isClosed() && socket.isConnected();
+    }
+
     // Runs until the client closes the connection or an error occurs
-    private void readLoop() throws IOException{
+    private void readLoop() throws IOException {
         String line;
         while ((line = in.readLine()) != null) {
             LOGGER.fine("[" + clientId + "] << " + line);
@@ -82,27 +86,22 @@ public class ClientHandler implements Runnable {
         LOGGER.info("[" + clientId + "] Connection closed.");
     }
 
-    protected void handleMessage(String rawMessage){
+    protected void handleMessage(String rawMessage) {
         // TODO: deserialise JSON → Message → dispatch to GameService / AuthService
         LOGGER.info("[" + clientId + "] Received: " + rawMessage);
         send("{\"type\":\"ECHO\",\"payload\":" + rawMessage + "}");
     }
-    
-    
-    
 
-    private void cleanup(){
+    private void cleanup() {
         registry.unregister(clientId);
-        try{
-            if (!socket.isClosed()){
+        try {
+            if (!socket.isClosed()) {
                 socket.close();
             }
-        } catch (IOException e){
+        } catch (IOException e) {
             LOGGER.log(Level.WARNING, "[" + clientId + "] Error closing socket", e);
         }
         LOGGER.info("[" + clientId + "] Resources released.");
     }
 
-
 }
-

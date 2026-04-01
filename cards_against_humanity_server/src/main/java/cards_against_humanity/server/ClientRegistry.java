@@ -24,6 +24,21 @@ public class ClientRegistry{
         LOGGER.info("Unregistered client " + clientId + " | Active connections: " + clients.size());
     }
 
+    // Broadcasts a raw JSON message to every connected client
+    public void broadcast(String message){
+        clients.values().forEach(handler -> handler.send(message));
+    }
+
+    // Sends a message to a specific client
+    public boolean sendTo(String clientId, String message){
+        ClientHandler handler = clients.get(clientId);
+        if (handler == null) {
+            return false;
+        }
+        handler.send(message);
+        return true;
+    }
+
     // Returns the number of currently connected clients
     public int getConnectionCount(){
         return clients.size();
@@ -34,5 +49,9 @@ public class ClientRegistry{
         return Collections.unmodifiableCollection(clients.values());
     }
 
+    // Returns an unmodifiable view of all active handlers.
+    public Collection<ClientHandler> getAll() {
+        return Collections.unmodifiableCollection(clients.values());
+    }
 
 }

@@ -57,4 +57,3 @@ sequenceDiagram
 
     Servidor->>Servidor: Inicia nova rodada
 ```
-

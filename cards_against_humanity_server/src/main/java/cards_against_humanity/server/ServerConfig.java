@@ -39,6 +39,26 @@ public final class ServerConfig{
         validate();
     }
 
+    public ServerConfig(int port) {
+        Properties props = loadProperties();
+        this.port = port;
+        this.maxConnection = parseInt(props, "server.max_connections", DEFAULT_MAX_CONNECTIONS);
+        this.threadPoolSize = parseInt(props, "server.thread_pool_size", DEFAULT_THREAD_POOL_SIZE);
+        this.backlog = parseInt(props, "server.backlog", DEFAULT_BACKLOG);
+        this.charset = props.getProperty("server.charset", DEFAULT_CHARSET);
+        validate();
+    }
+
+    public ServerConfig(int port, int maxConnections, int threadPoolSize) {
+        this.port = port;
+        this.maxConnection = maxConnections;
+        this.threadPoolSize = threadPoolSize;
+        this.backlog = DEFAULT_BACKLOG;
+        this.charset = DEFAULT_CHARSET;
+        validate();
+    }
+
+
     private void validate(){
         if (port < 0 || port > 65535){
             throw new IllegalArgumentException("Port must be in [0 - 65535], got: " + port);
