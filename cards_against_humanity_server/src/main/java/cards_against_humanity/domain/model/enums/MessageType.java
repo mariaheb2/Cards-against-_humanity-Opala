@@ -1,4 +1,4 @@
-package cards_against_humanity.models.enums;
+package cards_against_humanity.domain.model.enums;
 
 public enum MessageType {
 
