@@ -21,6 +21,9 @@ public class PlayedCard extends BaseEntity {
     @Column(nullable = false)
     private boolean winner;
 
+    @Column(name = "round_number", nullable = false)
+    private int roundNumber;
+
     protected PlayedCard() {
         // JPA
     }
@@ -30,6 +33,7 @@ public class PlayedCard extends BaseEntity {
         this.card = card;
         this.game = game;
         this.winner = false;
+        this.roundNumber = 0; 
     }
 
     // Getters
@@ -51,5 +55,12 @@ public class PlayedCard extends BaseEntity {
 
     public void setWinner(boolean winner) {
         this.winner = winner;
+    }
+
+    public int getRoundNumber() { 
+        return roundNumber; 
+    }
+    public void setRoundNumber(int roundNumber) { 
+        this.roundNumber = roundNumber; 
     }
 }
