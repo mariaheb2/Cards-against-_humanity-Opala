@@ -69,5 +69,5 @@ public class JpaGameRepository implements GameRepository {
                 .getResultList();
             return games.stream().findFirst();
         });
-    }
+    }        
 }
