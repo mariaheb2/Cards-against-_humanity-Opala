@@ -16,11 +16,17 @@ import cards_against_humanity.application.service.AuthService;
 import cards_against_humanity.domain.model.User;
 import cards_against_humanity.network.dto.LoginRequest;
 import cards_against_humanity.network.dto.RegisterRequest;
+import cards_against_humanity.server.event.EventBus;
+import cards_against_humanity.server.event.EventType;
+import cards_against_humanity.server.event.GameEvent;
 
 public class ClientHandler implements Runnable {
 
     private final AuthService authService;
     private String authenticatedUserId;
+
+    /** EventBus compartilhado por todos os handlers; pode ser {@code null} se não injetado. */
+    private final EventBus eventBus;
 
     private static final Logger LOGGER = Logger.getLogger(ClientHandler.class.getName());
 
@@ -34,22 +40,26 @@ public class ClientHandler implements Runnable {
     private PrintWriter out;
     private BufferedReader in;
 
-    public ClientHandler(Socket socket, ClientRegistry registry, String charset, AuthService authService) {
+    /** Construtor completo – usado pelo {@link ClientHandlerFactory}. */
+    public ClientHandler(Socket socket, ClientRegistry registry, String charset,
+                         AuthService authService, EventBus eventBus) {
         this.clientId = UUID.randomUUID().toString();
         this.socket = socket;
         this.registry = registry;
         this.charset = charset;
         this.authService = authService;
+        this.eventBus = eventBus;
         this.authenticatedUserId = null;
     }
 
+    /** Construtor legado sem EventBus (compatibilidade retroativa). */
+    public ClientHandler(Socket socket, ClientRegistry registry, String charset, AuthService authService) {
+        this(socket, registry, charset, authService, null);
+    }
+
+    /** Construtor mínimo sem AuthService nem EventBus. */
     public ClientHandler(Socket socket, ClientRegistry registry, String charset) {
-        this.clientId = UUID.randomUUID().toString();
-        this.socket = socket;
-        this.registry = registry;
-        this.charset = charset;
-        this.authService = null;
-        this.authenticatedUserId = null;
+        this(socket, registry, charset, null, null);
     }
 
     @Override
@@ -59,11 +69,13 @@ public class ClientHandler implements Runnable {
         try {
             openStreams();
             registry.register(clientId, this);
+            publishLifecycle(EventType.CLIENT_CONNECTED, null);
             sendWelcome();
             readLoop();
         } catch (IOException e) {
             LOGGER.log(Level.WARNING, "[" + clientId + "] I/O error: " + e.getMessage(), e);
         } finally {
+            publishLifecycle(EventType.CLIENT_DISCONNECTED, null);
             cleanup();
         }
     }
@@ -121,18 +133,78 @@ public class ClientHandler implements Runnable {
                     handleLogin(payload);
                     break;
                 default:
-                    // Para outras mensagens, exige autenticação
+                    // Para mensagens de jogo, exige autenticação
                     if (authenticatedUserId == null) {
                         sendError("Not authenticated. Please login first.");
                     } else {
-                        // depois instaciar gameservice e delegar a lógica de cada mensagem
-                        send("{\"type\":\"ECHO\",\"payload\":" + rawMessage + "}");
+                        dispatchGameEvent(type, payload);
                     }
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Error processing message", e);
             sendError("Invalid message format or internal error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Converte um {@link MessageType} de jogo em um {@link EventType} e o publica
+     * no {@link EventBus}.  Se o EventBus não estiver disponível, faz echo do
+     * payload como fallback para não quebrar clientes existentes.
+     *
+     * @param type    tipo da mensagem recebida
+     * @param payload JSON payload extraído da mensagem
+     */
+    private void dispatchGameEvent(MessageType type, JsonObject payload) {
+        EventType eventType = toEventType(type);
+
+        if (eventType == null) {
+            LOGGER.warning("[" + clientId + "] Unhandled message type: " + type);
+            send("{\"type\":\"ERROR\",\"payload\":{\"message\":\"Unknown message type: " + type + "\"}}");
+            return;
+        }
+
+        String gameId = payload != null && payload.has("gameId")
+                ? payload.get("gameId").getAsString()
+                : null;
+
+        GameEvent event = new GameEvent(eventType, clientId, gameId, payload);
+
+        if (eventBus != null) {
+            LOGGER.fine("[" + clientId + "] Publishing event: " + eventType);
+            eventBus.publish(event);
+        } else {
+            // Sem EventBus configurado: modo echo para compatibilidade em testes
+            LOGGER.warning("[" + clientId + "] EventBus not configured – echoing message.");
+            send("{\"type\":\"ECHO\",\"payload\":" + (payload != null ? payload : "{}") + "}");
+        }
+    }
+
+    /**
+     * Mapeia {@link MessageType} para {@link EventType}.
+     *
+     * @param type tipo da mensagem de rede
+     * @return EventType correspondente, ou {@code null} se não mapeado
+     */
+    private EventType toEventType(MessageType type) {
+        return switch (type) {
+            case CREATE_GAME    -> EventType.CREATE_GAME;
+            case JOIN_GAME      -> EventType.JOIN_GAME;
+            case START_GAME     -> EventType.START_GAME;
+            case PLAY_CARD      -> EventType.PLAY_CARD;
+            case SELECT_WINNER  -> EventType.SELECT_WINNER;
+            default             -> null;
+        };
+    }
+
+    /**
+     * Publica um evento de ciclo de vida da conexão (CONNECTED / DISCONNECTED).
+     * É seguro chamar mesmo quando o EventBus não está configurado.
+     */
+    private void publishLifecycle(EventType type, String gameId) {
+        if (eventBus == null) return;
+        JsonObject meta = new JsonObject();
+        meta.addProperty("clientId", clientId);
+        eventBus.publish(new GameEvent(type, clientId, gameId, meta));
     }
 
     private void handleRegister(JsonObject payload) {
