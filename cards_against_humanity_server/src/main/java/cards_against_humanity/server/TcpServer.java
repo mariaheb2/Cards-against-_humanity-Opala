@@ -10,9 +10,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import cards_against_humanity.application.handler.GameEventHandler;
 import cards_against_humanity.application.service.AuthService;
+import cards_against_humanity.application.service.GameService;
+import cards_against_humanity.application.service.LobbyService;
+import cards_against_humanity.domain.repository.CardRepository;
+import cards_against_humanity.domain.repository.GameRepository;
+import cards_against_humanity.domain.repository.PlayedCardRepository;
+import cards_against_humanity.domain.repository.PlayerRepository;
 import cards_against_humanity.domain.repository.UserRepository;
 import cards_against_humanity.domain.service.auth.PasswordEncoder;
+import cards_against_humanity.infrastructure.persistence.JpaCardRepository;
+import cards_against_humanity.infrastructure.persistence.JpaGameRepository;
+import cards_against_humanity.infrastructure.persistence.JpaPlayedCardRepository;
+import cards_against_humanity.infrastructure.persistence.JpaPlayerRepository;
 import cards_against_humanity.infrastructure.persistence.JpaUserRepository;
 import cards_against_humanity.infrastructure.security.BCryptPasswordEncoder;
 import cards_against_humanity.server.event.EventBus;
@@ -36,7 +47,7 @@ public class TcpServer {
         this(new ServerConfig());
     }
 
-    // Construtor que recebe apenas ServerConfig (cria AuthService padrão)
+    // Construtor que recebe apenas ServerConfig (cria serviços padrão)
     public TcpServer(ServerConfig config) {
         this(config, createDefaultAuthService());
     }
@@ -47,6 +58,24 @@ public class TcpServer {
         this.registry = new ClientRegistry();
         this.eventBus = new EventBus();
         this.handlerFactory = new ClientHandlerFactory(registry, config, authService, eventBus);
+
+        // Instancia repositórios JPA
+        GameRepository gameRepository = new JpaGameRepository();
+        PlayerRepository playerRepository = new JpaPlayerRepository();
+        CardRepository cardRepository = new JpaCardRepository();
+        PlayedCardRepository playedCardRepository = new JpaPlayedCardRepository();
+        UserRepository userRepository = new JpaUserRepository();
+
+        // Instancia serviços de domínio
+        GameService gameService = new GameService(gameRepository, playerRepository, cardRepository,
+                playedCardRepository);
+        LobbyService lobbyService = new LobbyService(gameRepository, playerRepository, userRepository, gameService);
+
+        // Registra o handler de eventos de jogo no EventBus
+        GameEventHandler gameEventHandler = new GameEventHandler(
+                eventBus, registry, lobbyService, gameService,
+                gameRepository, playerRepository, playedCardRepository);
+        gameEventHandler.register();
     }
 
     private static AuthService createDefaultAuthService() {

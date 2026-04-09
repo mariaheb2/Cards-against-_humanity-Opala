@@ -231,6 +231,8 @@ public class ClientHandler implements Runnable {
         try {
             User user = authService.login(request);
             this.authenticatedUserId = user.getId();
+            // Register the userId <-> clientId mapping for game event routing
+            registry.mapUser(user.getId(), clientId);
             JsonObject responsePayload = new JsonObject();
             responsePayload.addProperty("userId", user.getId());
             responsePayload.addProperty("username", user.getUsername());
@@ -251,7 +253,7 @@ public class ClientHandler implements Runnable {
     private void sendError(String message) {
         JsonObject payload = new JsonObject();
         payload.addProperty("message", message);
-        send(MessageType.LOGIN_ERROR, payload); // ou um tipo genérico ERROR
+        send(MessageType.ERROR, payload);
     }
 
     private JsonObject createErrorPayload(String message) {

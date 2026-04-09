@@ -23,10 +23,16 @@ public enum MessageType {
     PLAY_CARD,
     PLAYER_PLAYED,
 
+    JUDGE_SELECTING,
+
     SELECT_WINNER,
     ROUND_RESULT,
 
     GAME_UPDATE,
 
-    END_GAME
+    GAME_FINISHED,
+
+    END_GAME,
+
+    ERROR
 }

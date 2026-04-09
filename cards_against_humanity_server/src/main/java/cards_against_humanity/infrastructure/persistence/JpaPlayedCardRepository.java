@@ -16,8 +16,12 @@ public class JpaPlayedCardRepository implements PlayedCardRepository {
 
     @Override
     public PlayedCard save(PlayedCard playedCard) {
-        transaction.executeVoid(em -> em.persist(playedCard));
-        return playedCard;
+        return transaction.execute(em -> {
+            if (em.contains(playedCard)) {
+                return playedCard;
+            }
+            return em.merge(playedCard);
+        });
     }
 
     @Override

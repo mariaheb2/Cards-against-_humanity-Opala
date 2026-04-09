@@ -8,7 +8,7 @@ import java.util.List;
 @Table(name = "players")
 public class Player extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -22,7 +22,7 @@ public class Player extends BaseEntity {
     @Column(name = "is_judge", nullable = false)
     private boolean isJudge;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "player_hand",
         joinColumns = @JoinColumn(name = "player_id"),
