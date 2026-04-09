@@ -1,93 +1,500 @@
-# Equipe 1
+# Cards Against Humanity — Servidor TCP
 
+Implementação de um servidor multiplayer para o jogo **Cards Against Humanity** usando Java 17, sockets TCP e arquitetura orientada a eventos (Event Bus).
 
+---
 
-## Getting started
+## Índice
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- [Descrição](#descrição)
+- [Arquitetura](#arquitetura)
+- [Pré-requisitos](#pré-requisitos)
+- [Configuração do banco de dados](#configuração-do-banco-de-dados)
+- [Configuração do servidor](#configuração-do-servidor)
+- [Como compilar e executar](#como-compilar-e-executar)
+- [Populando as cartas](#populando-as-cartas)
+- [Protocolo de comunicação](#protocolo-de-comunicação)
+- [Fluxo de jogo](#fluxo-de-jogo)
+- [Testando com Netcat / Telnet](#testando-com-netcat--telnet)
+- [Estrutura do projeto](#estrutura-do-projeto)
+- [Referência de configurações](#referência-de-configurações)
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## Descrição
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+O servidor gerencia múltiplas partidas simultâneas via conexões TCP. Cada cliente se conecta, se autentica e pode criar ou entrar em uma partida. A lógica do jogo é orquestrada por um **Event Bus** interno que desacopla os handlers de conexão dos serviços de domínio.
+
+**Funcionalidades implementadas:**
+
+- Registro e login de usuários com senha em BCrypt
+- Criação e entrada em partidas (lobby)
+- Distribuição de cartas por rodada
+- Seleção circular de juiz
+- Jogada de cartas de resposta
+- Seleção do vencedor da rodada pelo juiz
+- Placar em tempo real
+- Encerramento automático ao atingir pontuação alvo
+
+---
+
+## Arquitetura
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/jala-university1/cohort-4/PT.CO.CSNT-245.GA.T1.26.M2/SA/equipe-1.git
-git branch -M main
-git push -uf origin main
+Cliente TCP
+    │
+    ▼
+ClientHandler  ──►  EventBus  ──►  GameEventHandler
+    │                                   │
+    │  (auth)                    ┌──────┴──────┐
+    ▼                            ▼             ▼
+AuthService                LobbyService   GameService
+                                │               │
+                                └───────┬───────┘
+                                        ▼
+                              Repositórios JPA (MySQL)
 ```
 
-## Integrate with your tools
+---
 
-* [Set up project integrations](https://gitlab.com/jala-university1/cohort-4/PT.CO.CSNT-245.GA.T1.26.M2/SA/equipe-1/-/settings/integrations)
+## Pré-requisitos
 
-## Collaborate with your team
+| Ferramenta | Versão mínima | Verificar |
+|---|---|---|
+| Java (JDK) | 17 | `java -version` |
+| Maven | 3.9+ | `mvn -version` |
+| MySQL | 8.0+ | `mysql --version` |
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+---
 
-## Test and Deploy
+## Configuração do banco de dados
 
-Use the built-in continuous integration in GitLab.
+> **O banco `cards_db` é criado automaticamente** pelo driver MySQL na primeira vez que o servidor inicia (`createDatabaseIfNotExist=true` no JDBC URL). As tabelas também são criadas/atualizadas automaticamente pelo Hibernate (`hbm2ddl.auto=update`).
+>
+> Só é necessário criar o **usuário** com as permissões adequadas.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+### 1. Criar usuário no MySQL
 
-***
+Conecte-se ao MySQL como root:
 
-# Editing this README
+```bash
+mysql -u root -p
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Execute:
 
-## Suggestions for a good README
+```sql
+CREATE USER IF NOT EXISTS 'game'@'localhost' IDENTIFIED BY '123';
+GRANT ALL PRIVILEGES ON cards_db.* TO 'game'@'localhost';
+-- Permissão para criar o banco na primeira execução:
+GRANT CREATE ON *.* TO 'game'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### 2. Ajustar credenciais (se necessário)
 
-## Name
-Choose a self-explaining name for your project.
+Edite `cards_against_humanity_server/src/main/resources/META-INF/persistence.xml`:
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```xml
+<property name="jakarta.persistence.jdbc.url"
+          value="jdbc:mysql://localhost:3306/cards_db?createDatabaseIfNotExist=true&amp;useSSL=false&amp;serverTimezone=UTC&amp;allowPublicKeyRetrieval=true"/>
+<property name="jakarta.persistence.jdbc.user"     value="game"/>
+<property name="jakarta.persistence.jdbc.password" value="123"/>
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+---
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Configuração do servidor
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Edite `cards_against_humanity_server/src/main/resources/config/config.properties`:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```properties
+# Porta TCP do servidor
+server.port=8080
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# Máximo de conexões simultâneas
+server.max_connections=50
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Tamanho do pool de threads (uma por cliente)
+server.thread_pool_size=50
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+# Fila de espera de conexões
+server.backlog=50
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+# Encoding das mensagens
+server.charset=UTF-8
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+> **Pontuação-alvo padrão:** 8 pontos (configurável em `LobbyService.DEFAULT_TARGET_SCORE`).
+> **Máx. jogadores padrão:** 6 (configurável em `LobbyService.DEFAULT_MAX_PLAYERS`).
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+---
 
-## License
-For open source projects, say how it is licensed.
+## Como compilar e executar
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Todos os comandos abaixo devem ser executados dentro do diretório do servidor:
+
+```bash
+cd cards_against_humanity_server
+```
+
+### Opção 1 — Desenvolvimento (recomendado)
+
+Compila e executa diretamente via Maven, sem gerar JAR:
+
+```bash
+# Linux / macOS
+mvn compile exec:java -Dexec.mainClass="cards_against_humanity.Main"
+
+# Windows (PowerShell) — aspas no argumento -D são obrigatórias
+mvn compile exec:java "-Dexec.mainClass=cards_against_humanity.Main"
+```
+
+### Opção 2 — Produção (JAR executável)
+
+Gera o JAR e executa. **Requer** o plugin `maven-assembly-plugin` ou `maven-shade-plugin` para empacotar as dependências. Com o `pom.xml` atual, use:
+
+```bash
+# 1. Gerar o JAR
+mvn clean package -DskipTests
+
+# 2. Executar (incluindo dependências no classpath manualmente)
+java -cp "target/cards_against_humanity_server-1.0-SNAPSHOT.jar;target/dependency/*" cards_against_humanity.Main
+```
+
+> **Dica (Windows PowerShell):** use `;` como separador de classpath.  
+> **Dica (Linux/macOS):** use `:` como separador de classpath.
+
+### Saída esperada ao iniciar
+
+```
+INFO: TCP Server started on port 8080 | Max connections: 50 | Thread pool: 50
+INFO: GameEventHandler registered for all game events.
+INFO: Accept loop started - waiting for connections
+INFO: Server is running on port 8080. Press Ctrl+C to stop.
+```
+
+Para parar o servidor, pressione **`Ctrl+C`** — o shutdown hook garante encerramento gracioso de todas as conexões.
+
+---
+
+## Populando as cartas
+
+As tabelas são criadas automaticamente, mas as cartas precisam ser inseridas manualmente (ou via script SQL) antes de iniciar uma partida.
+
+Conecte ao MySQL e insira ao menos algumas cartas de cada tipo:
+
+```sql
+USE cards_db;
+
+-- Cartas pergunta (QUESTION)
+INSERT INTO cards (id, text, type) VALUES
+  (UUID(), 'Por que cheguei atrasado: ___', 'QUESTION'),
+  (UUID(), '___ é a razão pela qual choro no chuveiro.', 'QUESTION'),
+  (UUID(), 'O que me mantém acordado à noite: ___', 'QUESTION'),
+  (UUID(), 'Segundo os cientistas, ___ é a causa do aquecimento global.', 'QUESTION'),
+  (UUID(), 'Meu plano de aposentadoria: ___', 'QUESTION');
+
+-- Cartas resposta (ANSWER)
+INSERT INTO cards (id, text, type) VALUES
+  (UUID(), 'Uma batata quente', 'ANSWER'),
+  (UUID(), 'Morgan Freeman narrando minha vida', 'ANSWER'),
+  (UUID(), 'O Wi-Fi caindo na hora errada', 'ANSWER'),
+  (UUID(), 'Aquela sensação de déjà vu', 'ANSWER'),
+  (UUID(), 'Um cachorro usando óculos', 'ANSWER'),
+  (UUID(), 'Acusar o estagiário', 'ANSWER'),
+  (UUID(), 'Ovos mexidos às 3 da manhã', 'ANSWER'),
+  (UUID(), 'Um complô do governo', 'ANSWER'),
+  (UUID(), 'Cheiro de gasolina', 'ANSWER'),
+  (UUID(), 'Nicolas Cage em seu melhor momento', 'ANSWER');
+```
+
+> **Mínimo recomendado:** 5+ perguntas e 10+ respostas (cada jogador recebe 5 cartas na mão).
+
+---
+
+## Protocolo de comunicação
+
+Todas as mensagens são **JSON de linha única** (`\n` como terminador), no formato:
+
+```json
+{ "type": "TIPO_DA_MENSAGEM", "payload": { ... } }
+```
+
+### Autenticação
+
+#### Registrar usuário
+
+```json
+// → Enviar
+{ "type": "REGISTER", "payload": { "username": "joao2", "email": "joao2@email.com", "password": "senha123" } }
+
+// ← Receber (sucesso)
+{ "type": "REGISTER_SUCCESS", "payload": { "userId": "uuid-do-usuario" } }
+
+// ← Receber (erro)
+{ "type": "REGISTER_ERROR", "payload": { "message": "Email already in use" } }
+```
+
+#### Login
+
+```json
+// → Enviar
+{ "type": "LOGIN", "payload": { "email": "joao@email.com", "password": "senha123" } }
+
+// ← Receber (sucesso)
+{ "type": "LOGIN_SUCCESS", "payload": { "userId": "uuid", "username": "joao" } }
+
+// ← Receber (erro)
+{ "type": "LOGIN_ERROR", "payload": { "message": "Invalid credentials" } }
+```
+
+### Jogo
+
+#### Criar partida
+
+```json
+// → Enviar (maxPlayers é opcional, padrão: 6)
+{ "type": "CREATE_GAME", "payload": { "maxPlayers": 4 } }
+
+// ← Receber
+{ "type": "GAME_CREATED", "payload": { "gameId": "uuid-da-partida" } }
+```
+
+#### Entrar em partida
+
+```json
+// → Enviar
+{ "type": "JOIN_GAME", "payload": { "gameId": "8a21525f-6be4-4e73-8fb6-8b0399d286ef" } }
+
+// ← Todos no jogo recebem
+{ "type": "PLAYER_JOINED", "payload": { "gameId": "...", "playerId": "...", "username": "maria" } }
+```
+
+#### Iniciar jogo
+
+```json
+// → Enviar
+{ "type": "START_GAME", "payload": { "gameId": "8a21525f-6be4-4e73-8fb6-8b0399d286ef" } }
+
+// ← Todos recebem
+{ "type": "GAME_STARTED", "payload": { "gameId": "..." } }
+
+// ← Cada jogador recebe sua mão individual (NEW_ROUND)
+{
+  "type": "NEW_ROUND",
+  "payload": {
+    "round": 1,
+    "judgeId": "uuid-do-juiz",
+    "isJudge": false,
+    "questionCard": { "id": "...", "text": "Por que cheguei atrasado: ___" },
+    "hand": [
+      { "id": "card-1", "text": "Uma batata quente" },
+      { "id": "card-2", "text": "Morgan Freeman narrando minha vida" }
+    ]
+  }
+}
+```
+
+#### Jogar uma carta (apenas não-juízes)
+
+```json
+// → Enviar
+{ "type": "PLAY_CARD", "payload": { "gameId": "...", "cardId": "card-1" } }
+
+// ← Todos recebem (confirmação de jogada)
+{ "type": "PLAYER_PLAYED", "payload": { "playerId": "...", "username": "joao" } }
+
+// ← Quando todos jogaram, todos recebem (cartas anônimas para o juiz escolher)
+{
+  "type": "JUDGE_SELECTING",
+  "payload": {
+    "gameId": "...",
+    "round": 1,
+    "playedCards": [
+      { "playedCardId": "pc-uuid-1", "text": "Uma batata quente" },
+      { "playedCardId": "pc-uuid-2", "text": "Morgan Freeman narrando minha vida" }
+    ]
+  }
+}
+```
+
+#### Selecionar vencedor (apenas o juiz)
+
+```json
+// → Enviar
+{ "type": "SELECT_WINNER", "payload": { "gameId": "...", "playedCardId": "pc-uuid-1" } }
+
+// ← Todos recebem (resultado da rodada)
+{
+  "type": "ROUND_RESULT",
+  "payload": {
+    "winnerId": "...",
+    "username": "maria",
+    "score": 3,
+    "scores": [
+      { "playerId": "...", "username": "joao",  "score": 2 },
+      { "playerId": "...", "username": "maria", "score": 3 }
+    ]
+  }
+}
+
+// ← Se alguém atingiu a pontuação alvo (8 pts por padrão):
+{
+  "type": "GAME_FINISHED",
+  "payload": {
+    "winnerId": "...",
+    "username": "maria",
+    "finalScores": [
+      { "playerId": "...", "username": "joao",  "score": 5 },
+      { "playerId": "...", "username": "maria", "score": 8 }
+    ]
+  }
+}
+```
+
+---
+
+## Fluxo de jogo
+
+```
+1. Jogadores se registram e fazem login
+2. Um jogador cria a partida (CREATE_GAME)
+3. Outros jogadores entram (JOIN_GAME)  ← mínimo 2 jogadores
+4. Qualquer jogador inicia (START_GAME)
+   └─ Servidor: sorteia juiz, distribui 5 cartas por jogador, envia carta-pergunta
+5. Loop de rodadas:
+   a. Não-juízes enviam PLAY_CARD com sua carta escolhida
+   b. Quando todos jogaram → servidor envia JUDGE_SELECTING com cartas anônimas
+   c. Juiz envia SELECT_WINNER com o ID da carta vencedora
+   d. Servidor envia ROUND_RESULT com pontuações atualizadas
+   e. Se alguém atingiu 8 pontos → GAME_FINISHED
+      Senão → nova rodada com próximo juiz (rotação circular)
+```
+
+---
+
+## Testando com Netcat / Telnet
+
+### Linux / macOS
+
+```bash
+# Terminal 1 — Jogador 1
+nc localhost 8080
+
+# Terminal 2 — Jogador 2
+nc localhost 8080
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Habilitar Telnet (executar uma vez como Administrador):
+Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient
+
+# Conectar:
+telnet localhost 8080
+```
+
+### Sessão de exemplo completa (dois jogadores)
+
+**Terminal 1 (Jogador 1 — criador):**
+```json
+← {"type":"CONNECTED","payload":{"clientId":"abc-123"}}
+
+→ {"type":"REGISTER","payload":{"username":"joao","email":"j@j.com","password":"123"}}
+← {"type":"REGISTER_SUCCESS","payload":{"userId":"user-uuid-1"}}
+
+→ {"type":"LOGIN","payload":{"email":"j@j.com","password":"123"}}
+← {"type":"LOGIN_SUCCESS","payload":{"userId":"user-uuid-1","username":"joao"}}
+
+→ {"type":"CREATE_GAME","payload":{"maxPlayers":3}}
+← {"type":"GAME_CREATED","payload":{"gameId":"game-uuid"}}
+```
+
+**Terminal 2 (Jogador 2):**
+```json
+← {"type":"CONNECTED","payload":{"clientId":"def-456"}}
+
+→ {"type":"REGISTER","payload":{"username":"maria","email":"m@m.com","password":"123"}}
+← {"type":"REGISTER_SUCCESS","payload":{"userId":"user-uuid-2"}}
+
+→ {"type":"LOGIN","payload":{"email":"m@m.com","password":"123"}}
+← {"type":"LOGIN_SUCCESS","payload":{"userId":"user-uuid-2","username":"maria"}}
+
+→ {"type":"JOIN_GAME","payload":{"gameId":"game-uuid"}}
+← {"type":"PLAYER_JOINED","payload":{"gameId":"game-uuid","playerId":"...","username":"maria"}}
+```
+
+**Terminal 1 (inicia o jogo):**
+```json
+→ {"type":"START_GAME","payload":{"gameId":"game-uuid"}}
+← {"type":"GAME_STARTED","payload":{"gameId":"game-uuid"}}
+← {"type":"NEW_ROUND","payload":{"round":1,"judgeId":"...","isJudge":true,"questionCard":{...},"hand":[...]}}
+```
+
+---
+
+## Estrutura do projeto
+
+```
+cards_against_humanity_server/
+├── pom.xml                                    # Dependências Maven (Java 17, Hibernate 6, MySQL)
+├── src/
+│   ├── main/
+│   │   ├── java/cards_against_humanity/
+│   │   │   ├── Main.java                      # Ponto de entrada
+│   │   │   ├── application/
+│   │   │   │   ├── handler/
+│   │   │   │   │   └── GameEventHandler.java  # Orquestra eventos → serviços → TCP
+│   │   │   │   └── service/
+│   │   │   │       ├── AuthService.java       # Registro e login (BCrypt)
+│   │   │   │       ├── GameService.java       # Rodadas, cartas, pontuação
+│   │   │   │       └── LobbyService.java      # Criar/entrar/iniciar partidas
+│   │   │   ├── domain/
+│   │   │   │   ├── model/                     # Entidades JPA (Game, Player, Card, User…)
+│   │   │   │   └── repository/               # Interfaces de repositório
+│   │   │   ├── infrastructure/
+│   │   │   │   ├── config/
+│   │   │   │   │   └── JpaConfig.java        # EntityManagerFactory singleton
+│   │   │   │   ├── persistence/              # Implementações JPA (MySQL)
+│   │   │   │   ├── security/                 # BCrypt para senhas
+│   │   │   │   └── transaction/
+│   │   │   │       └── Transaction.java      # begin/commit/rollback/close
+│   │   │   ├── network/
+│   │   │   │   └── dto/                      # DTOs de request/response
+│   │   │   └── server/
+│   │   │       ├── TcpServer.java            # Accept loop + wiring
+│   │   │       ├── ClientHandler.java        # Lê/escreve TCP por cliente
+│   │   │       ├── ClientRegistry.java       # Mapa clientId ↔ userId
+│   │   │       ├── ServerConfig.java         # Lê config.properties
+│   │   │       └── event/
+│   │   │           ├── EventBus.java         # Publish/subscribe thread-safe
+│   │   │           ├── EventType.java        # Tipos de eventos internos
+│   │   │           └── GameEvent.java        # Evento imutável
+│   │   └── resources/
+│   │       ├── META-INF/
+│   │       │   └── persistence.xml           # Configuração JPA/Hibernate + MySQL
+│   │       └── config/
+│   │           └── config.properties         # Porta, threads, charset
+│   └── test/                                 # Testes JUnit 5 + Mockito
+```
+
+---
+
+## Referência de configurações
+
+| Parâmetro | Arquivo | Padrão |
+|---|---|---|
+| Porta TCP | `config.properties` → `server.port` | `8080` |
+| Máx. conexões | `config.properties` → `server.max_connections` | `50` |
+| Thread pool | `config.properties` → `server.thread_pool_size` | `50` |
+| Pontuação alvo | `LobbyService.java` → `DEFAULT_TARGET_SCORE` | `8` |
+| Máx. jogadores | `LobbyService.java` → `DEFAULT_MAX_PLAYERS` | `6` |
+| Cartas por mão | `GameService.java` → `refillHand()` | `5` |
+| BD URL | `persistence.xml` | `localhost:3306/cards_db` |
+| BD usuário | `persistence.xml` | `game` |
+| BD senha | `persistence.xml` | `123` |
+| Criação automática do BD | `persistence.xml` (JDBC URL) | `createDatabaseIfNotExist=true` |
+| DDL automático | `persistence.xml` → `hibernate.hbm2ddl.auto` | `update` |

@@ -53,7 +53,7 @@ public class JpaCardRepository implements CardRepository {
     @Override
     public List<Card> findRandomAnswers(int limit) {
         return transaction.execute(em ->
-            em.createQuery("SELECT c FROM Card c WHERE c.type = :type ORDER BY RANDOM()", Card.class)
+            em.createQuery("SELECT c FROM Card c WHERE c.type = :type ORDER BY RAND()", Card.class)
                 .setParameter("type", CardType.ANSWER)
                 .setMaxResults(limit)
                 .getResultList()
@@ -63,7 +63,7 @@ public class JpaCardRepository implements CardRepository {
     @Override
     public List<Card> findRandomQuestions(int limit) {
         return transaction.execute(em ->
-            em.createQuery("SELECT c FROM Card c WHERE c.type = :type ORDER BY RANDOM()", Card.class)
+            em.createQuery("SELECT c FROM Card c WHERE c.type = :type ORDER BY RAND()", Card.class)
                 .setParameter("type", CardType.QUESTION)
                 .setMaxResults(limit)
                 .getResultList()

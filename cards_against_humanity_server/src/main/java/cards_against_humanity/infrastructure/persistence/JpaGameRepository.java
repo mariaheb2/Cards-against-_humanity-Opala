@@ -18,8 +18,12 @@ public class JpaGameRepository implements GameRepository {
 
     @Override
     public Game save(Game game) {
-        transaction.executeVoid(em -> em.persist(game));
-        return game;
+        return transaction.execute(em -> {
+            if (em.contains(game)) {
+                return game; // already managed
+            }
+            return em.merge(game);
+        });
     }
 
     @Override

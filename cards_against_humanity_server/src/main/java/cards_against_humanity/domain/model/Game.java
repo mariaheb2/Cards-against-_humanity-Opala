@@ -23,7 +23,7 @@ public class Game extends BaseEntity {
     @Column(name = "target_score", nullable = false)
     private int targetScore;
 
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<Player> players = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -34,7 +34,7 @@ public class Game extends BaseEntity {
     @JoinColumn(name = "current_question_id")
     private Card currentQuestion;
 
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<PlayedCard> playedCards = new ArrayList<>();
 
     protected Game() {

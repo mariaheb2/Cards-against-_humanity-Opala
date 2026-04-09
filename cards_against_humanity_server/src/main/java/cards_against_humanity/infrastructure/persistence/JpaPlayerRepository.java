@@ -16,8 +16,12 @@ public class JpaPlayerRepository implements PlayerRepository {
 
     @Override
     public Player save(Player player) {
-        transaction.executeVoid(em -> em.persist(player));
-        return player;
+        return transaction.execute(em -> {
+            if (em.contains(player)) {
+                return player;
+            }
+            return em.merge(player);
+        });
     }
 
     @Override
