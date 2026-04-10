@@ -37,6 +37,11 @@ public class AuthService {
         return user.getId();
     }
 
+    public boolean validateUserById(String userId, String username) {
+        Optional<User> user = userRepository.findById(userId);
+        return user.isPresent() && user.get().getUsername().equals(username);
+    }
+
     /**
      * Realiza login.
      * @return User se credenciais válidas, caso contrário lança exceção.

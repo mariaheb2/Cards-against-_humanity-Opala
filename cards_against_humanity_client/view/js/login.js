@@ -1,4 +1,3 @@
-// login.js – versão que garante envio do tipo LOGIN
 document.addEventListener('DOMContentLoaded', async () => {
     const statusDiv = document.getElementById('status');
     const loginBtn = document.getElementById('login-btn');
