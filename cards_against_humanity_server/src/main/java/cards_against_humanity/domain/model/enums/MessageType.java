@@ -9,6 +9,8 @@ public enum MessageType {
     LOGIN_SUCCESS,
     LOGIN_ERROR,
 
+    RESTORE_SESSION,
+
     CREATE_GAME,
     GAME_CREATED,
 

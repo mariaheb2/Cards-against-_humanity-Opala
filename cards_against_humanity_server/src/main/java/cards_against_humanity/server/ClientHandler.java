@@ -132,6 +132,9 @@ public class ClientHandler implements Runnable {
                 case LOGIN:
                     handleLogin(payload);
                     break;
+                case RESTORE_SESSION:
+                    handleRestoreSession(payload);
+                    break;
                 default:
                     // Para mensagens de jogo, exige autenticação
                     if (authenticatedUserId == null) {
@@ -260,6 +263,23 @@ public class ClientHandler implements Runnable {
         JsonObject obj = new JsonObject();
         obj.addProperty("message", message);
         return obj;
+    }
+
+    private void handleRestoreSession(JsonObject payload) {
+        String userId = payload.get("userId").getAsString();
+        String username = payload.get("username").getAsString();
+        boolean valid = authService.validateUserById(userId, username);
+        if (!valid) {
+            sendError("Invalid session. Please login again.");
+            return;
+        }
+        this.authenticatedUserId = userId;
+        registry.mapUser(userId, clientId);
+        JsonObject response = new JsonObject();
+        response.addProperty("status", "SESSION_RESTORED");
+        response.addProperty("userId", userId);
+        response.addProperty("username", username);
+        send(MessageType.RESTORE_SESSION, response);
     }
 
     private void cleanup() {
