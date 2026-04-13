@@ -333,13 +333,28 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleJoinGame(JsonObject payload) {
-        String gameId = payload.get("gameCode").getAsString();
+        // Aceita o código tanto em 'gameCode' quanto em 'gameId'
+        String gameId = payload.has("gameCode")
+                ? payload.get("gameCode").getAsString()
+                : payload.get("gameId").getAsString();
         try {
             Player player = lobbyService.joinGame(authenticatedUserId, gameId);
             this.currentGameCode = gameId;
+
+            // 1. Responde ao jogador que entrou com o código da sala
             JsonObject resp = new JsonObject();
             resp.addProperty("gameCode", gameId);
+            resp.addProperty("gameId", gameId);
             send(MessageType.GAME_CODE, resp);
+
+            // 2. Broadcast PLAYER_JOINED para TODOS os jogadores na sala
+            JsonObject joinedPayload = new JsonObject();
+            joinedPayload.addProperty("gameId", gameId);
+            joinedPayload.addProperty("playerId", player.getId());
+            joinedPayload.addProperty("username", player.getUser().getUsername());
+            broadcastToGame(gameId, MessageType.PLAYER_JOINED, joinedPayload);
+
+            LOGGER.info("[" + clientId + "] User " + authenticatedUserId + " joined game " + gameId);
         } catch (Exception e) {
             sendError(e.getMessage());
         }
@@ -348,16 +363,37 @@ public class ClientHandler implements Runnable {
     
 
     private void handleGetGameInfo(JsonObject payload) {
-        String gameCode = payload.get("gameCode").getAsString();
-        Game game = lobbyService.getGameById(gameCode); 
+        // Aceita tanto 'gameCode' quanto 'gameId'
+        String gameCode = payload.has("gameCode")
+                ? payload.get("gameCode").getAsString()
+                : (payload.has("gameId") ? payload.get("gameId").getAsString() : null);
+        if (gameCode == null) {
+            sendError("gameCode or gameId is required");
+            return;
+        }
+        Game game = lobbyService.getGameById(gameCode);
         if (game == null) {
             sendError("Sala não encontrada");
             return;
         }
+
+        // Busca lista completa de jogadores
+        java.util.List<Player> players = lobbyService.getPlayersInGame(gameCode);
+
+        JsonArray playersArray = new JsonArray();
+        for (Player p : players) {
+            JsonObject pObj = new JsonObject();
+            pObj.addProperty("playerId", p.getId());
+            pObj.addProperty("username", p.getUser().getUsername());
+            playersArray.add(pObj);
+        }
+
         JsonObject resp = new JsonObject();
-        resp.addProperty("playerCount", game.getPlayers().size());
+        resp.addProperty("gameId", gameCode);
+        resp.addProperty("playerCount", players.size());
         resp.addProperty("maxPlayers", game.getMaxPlayers());
-        resp.addProperty("isOwner", game.getOwnerId().equals(authenticatedUserId)); // se tiver owner
+        resp.addProperty("isOwner", game.getOwnerId().equals(authenticatedUserId));
+        resp.add("players", playersArray);
         send(MessageType.GAME_UPDATE, resp);
     }
 
@@ -368,19 +404,63 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleStartGame(JsonObject payload) {
-        String gameCode = payload.get("gameCode").getAsString();
-        // Verificar se é o owner e número mínimo de jogadores
+        // Aceita tanto 'gameCode' quanto 'gameId'
+        String gameCode = payload.has("gameCode")
+                ? payload.get("gameCode").getAsString()
+                : (payload.has("gameId") ? payload.get("gameId").getAsString() : null);
+        if (gameCode == null) {
+            sendError("gameCode or gameId is required");
+            return;
+        }
+
+        // Verificar se é o owner
         Game game = lobbyService.getGameById(gameCode);
         if (game == null || !game.getOwnerId().equals(authenticatedUserId)) {
             sendError("Apenas o criador pode iniciar");
             return;
         }
-        if (game.getPlayers().size() < 3) {
+
+        // Verificar número mínimo de jogadores
+        java.util.List<Player> players = lobbyService.getPlayersInGame(gameCode);
+        if (players.size() < 3) {
             sendError("Mínimo de 3 jogadores necessário");
             return;
         }
-        // Chama o serviço de jogo para iniciar a partida
-        lobbyService.startGame(gameCode);
+
+        try {
+            // Inicia o jogo (muda estado, sorteia carta, distribui mãos)
+            lobbyService.startGame(gameCode);
+
+            // Broadcast GAME_STARTED para TODOS os jogadores na sala
+            JsonObject startedPayload = new JsonObject();
+            startedPayload.addProperty("gameId", gameCode);
+            broadcastToGame(gameCode, MessageType.GAME_STARTED, startedPayload);
+
+            LOGGER.info("[" + clientId + "] Game started by owner: " + gameCode);
+        } catch (Exception e) {
+            LOGGER.warning("[" + clientId + "] Error starting game: " + e.getMessage());
+            sendError(e.getMessage());
+        }
+    }
+
+    /**
+     * Envia uma mensagem para todos os jogadores de uma sala.
+     * Percorre a lista de jogadores via LobbyService e envia para cada clientId
+     * mapeado no registry.
+     */
+    private void broadcastToGame(String gameId, MessageType type, JsonObject payload) {
+        java.util.List<Player> players = lobbyService.getPlayersInGame(gameId);
+        JsonObject msg = new JsonObject();
+        msg.addProperty("type", type.name());
+        msg.add("payload", payload);
+        String json = msg.toString();
+        for (Player p : players) {
+            String targetClientId = registry.getClientIdByUserId(p.getUser().getId());
+            if (targetClientId != null) {
+                registry.sendTo(targetClientId, json);
+                LOGGER.fine("[broadcastToGame] Sent " + type + " to client " + targetClientId);
+            }
+        }
     }
 
     private void cleanup() {
