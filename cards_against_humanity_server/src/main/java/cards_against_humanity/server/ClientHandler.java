@@ -352,7 +352,7 @@ public class ClientHandler implements Runnable {
 
     private void handleGetGameInfo(JsonObject payload) {
         String gameCode = payload.get("gameCode").getAsString();
-        Game game = lobbyService.getGameById(gameCode); // você precisa criar esse método no LobbyService
+        Game game = lobbyService.getGameById(gameCode); 
         if (game == null) {
             sendError("Sala não encontrada");
             return;
@@ -384,7 +384,6 @@ public class ClientHandler implements Runnable {
         }
         // Chama o serviço de jogo para iniciar a partida
         lobbyService.startGame(gameCode);
-        // O GameEventHandler já deve enviar GAME_STARTED para todos
     }
 
     private void cleanup() {
