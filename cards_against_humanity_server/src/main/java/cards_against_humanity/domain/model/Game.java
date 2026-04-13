@@ -14,6 +14,9 @@ public class Game extends BaseEntity {
     @Column(nullable = false)
     private GameState state;
 
+    @Column(name = "owner_id")
+    private String ownerId;
+
     @Column(nullable = false)
     private int round;
 
@@ -95,6 +98,14 @@ public class Game extends BaseEntity {
 
     public List<PlayedCard> getPlayedCards() {
         return playedCards;
+    }
+
+    public void setOwnerId(String ownerId) {
+        this.ownerId = ownerId;
+    }
+
+    public String getOwnerId() {
+        return ownerId;
     }
 
 }

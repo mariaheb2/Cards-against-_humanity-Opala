@@ -57,7 +57,6 @@ public class TcpServer {
         this.config = config;
         this.registry = new ClientRegistry();
         this.eventBus = new EventBus();
-        this.handlerFactory = new ClientHandlerFactory(registry, config, authService, eventBus);
 
         // Instancia repositórios JPA
         GameRepository gameRepository = new JpaGameRepository();
@@ -70,6 +69,8 @@ public class TcpServer {
         GameService gameService = new GameService(gameRepository, playerRepository, cardRepository,
                 playedCardRepository);
         LobbyService lobbyService = new LobbyService(gameRepository, playerRepository, userRepository, gameService);
+        
+        this.handlerFactory = new ClientHandlerFactory(registry, config, authService, eventBus, lobbyService);
 
         // Registra o handler de eventos de jogo no EventBus
         GameEventHandler gameEventHandler = new GameEventHandler(

@@ -14,8 +14,20 @@ public enum MessageType {
     CREATE_GAME,
     GAME_CREATED,
 
+    LIST_USERS,
+    USER_LIST,
+
+    INVITE_PLAYER,
+    INVITE_SENT,
+
+    GAME_CODE,
+
+    GET_GAME_INFO,  
+    LEAVE_GAME,
+
     JOIN_GAME,
     PLAYER_JOINED,
+    PLAYER_LEFT,
 
     START_GAME,
     GAME_STARTED,

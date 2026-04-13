@@ -76,6 +76,7 @@ public class LobbyService {
 
             Game game = new Game(maxPlayers, targetScore);
             game.setState(GameState.WAITING_PLAYERS);
+            game.setOwnerId(userId);
             gameRepository.save(game);
 
             Player player = new Player(user, game);
@@ -216,5 +217,29 @@ public class LobbyService {
      */
     public List<Player> getPlayersInGame(String gameId) {
         return playerRepository.findByGameId(gameId);
+    }
+
+    public Game getGameInfo(String gameId) {
+        return gameRepository.findById(gameId).orElse(null);
+    }
+
+    public List<Game> listActiveGames() {
+        return gameRepository.findByState(GameState.WAITING_PLAYERS);
+    }
+
+    public Game getGameById(String gameId) {
+        return gameRepository.findById(gameId).orElse(null);
+    }
+
+    public void leaveGame(String userId, String gameId) {
+        transaction.executeVoid(em -> {
+            Player player = playerRepository.findByUserIdAndGameId(userId, gameId)
+                    .orElseThrow(() -> new IllegalArgumentException("Jogador não está na sala"));
+            playerRepository.delete(player);
+            // Se a sala ficou vazia, deletar
+            if (playerRepository.findByGameId(gameId).isEmpty()) {
+                gameRepository.findById(gameId).ifPresent(gameRepository::delete);
+            }
+        });
     }
 }

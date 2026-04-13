@@ -5,25 +5,33 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import cards_against_humanity.domain.model.enums.MessageType;
 import cards_against_humanity.application.service.AuthService;
+import cards_against_humanity.application.service.LobbyService;
+import cards_against_humanity.domain.model.Game;
+import cards_against_humanity.domain.model.Player;
 import cards_against_humanity.domain.model.User;
 import cards_against_humanity.network.dto.LoginRequest;
 import cards_against_humanity.network.dto.RegisterRequest;
 import cards_against_humanity.server.event.EventBus;
 import cards_against_humanity.server.event.EventType;
-import cards_against_humanity.server.event.GameEvent;
+import cards_against_humanity.server.event.GameEvent;;
 
 public class ClientHandler implements Runnable {
 
     private final AuthService authService;
     private String authenticatedUserId;
+    private final LobbyService lobbyService;
+    private String currentGameCode;
 
     /** EventBus compartilhado por todos os handlers; pode ser {@code null} se não injetado. */
     private final EventBus eventBus;
@@ -42,7 +50,7 @@ public class ClientHandler implements Runnable {
 
     /** Construtor completo – usado pelo {@link ClientHandlerFactory}. */
     public ClientHandler(Socket socket, ClientRegistry registry, String charset,
-                         AuthService authService, EventBus eventBus) {
+                         AuthService authService, EventBus eventBus, LobbyService lobbyService) {
         this.clientId = UUID.randomUUID().toString();
         this.socket = socket;
         this.registry = registry;
@@ -50,16 +58,17 @@ public class ClientHandler implements Runnable {
         this.authService = authService;
         this.eventBus = eventBus;
         this.authenticatedUserId = null;
+        this.lobbyService = lobbyService;
     }
 
     /** Construtor legado sem EventBus (compatibilidade retroativa). */
-    public ClientHandler(Socket socket, ClientRegistry registry, String charset, AuthService authService) {
-        this(socket, registry, charset, authService, null);
+    public ClientHandler(Socket socket, ClientRegistry registry, String charset, AuthService authService, LobbyService lobbyService) {
+        this(socket, registry, charset, authService, null, lobbyService);
     }
 
     /** Construtor mínimo sem AuthService nem EventBus. */
     public ClientHandler(Socket socket, ClientRegistry registry, String charset) {
-        this(socket, registry, charset, null, null);
+        this(socket, registry, charset, null, null, null);
     }
 
     @Override
@@ -134,6 +143,24 @@ public class ClientHandler implements Runnable {
                     break;
                 case RESTORE_SESSION:
                     handleRestoreSession(payload);
+                    break;
+                case LIST_USERS:
+                    handleListUsers();
+                    break;
+                case CREATE_GAME:
+                    handleCreateGame(payload);
+                    break;
+                case JOIN_GAME:
+                    handleJoinGame(payload);
+                    break;
+                case GET_GAME_INFO:
+                    handleGetGameInfo(payload);
+                    break;
+                case LEAVE_GAME:
+                    handleLeaveGame(payload);
+                    break;
+                case START_GAME:
+                    handleStartGame(payload);
                     break;
                 default:
                     // Para mensagens de jogo, exige autenticação
@@ -235,7 +262,7 @@ public class ClientHandler implements Runnable {
             User user = authService.login(request);
             this.authenticatedUserId = user.getId();
             // Register the userId <-> clientId mapping for game event routing
-            registry.mapUser(user.getId(), clientId);
+            registry.setUserDetails(user.getId(), user.getUsername(), clientId);
             JsonObject responsePayload = new JsonObject();
             responsePayload.addProperty("userId", user.getId());
             responsePayload.addProperty("username", user.getUsername());
@@ -274,12 +301,86 @@ public class ClientHandler implements Runnable {
             return;
         }
         this.authenticatedUserId = userId;
-        registry.mapUser(userId, clientId);
+        registry.setUserDetails(userId, username, clientId);
         JsonObject response = new JsonObject();
         response.addProperty("status", "SESSION_RESTORED");
         response.addProperty("userId", userId);
         response.addProperty("username", username);
         send(MessageType.RESTORE_SESSION, response);
+    }
+
+    private void handleListUsers() {
+        JsonArray usersArray = new JsonArray();
+        for (Map<String, String> user : registry.getAllOnlineUsers()) {
+            JsonObject obj = new JsonObject();
+            obj.addProperty("id", user.get("id"));
+            obj.addProperty("username", user.get("username"));
+            usersArray.add(obj);
+        }
+        JsonObject payload = new JsonObject();
+        payload.add("users", usersArray);
+        send(MessageType.USER_LIST, payload);
+    }
+
+    private void handleCreateGame(JsonObject payload) {
+        int maxPlayers = payload.get("maxPlayers").getAsInt();
+        int targetScore = payload.has("targetScore") ? payload.get("targetScore").getAsInt() : 8;
+        Game game = lobbyService.createGame(authenticatedUserId, maxPlayers, targetScore);
+        this.currentGameCode = game.getId();
+        JsonObject resp = new JsonObject();
+        resp.addProperty("gameCode", this.currentGameCode);
+        send(MessageType.GAME_CREATED, resp);
+    }
+
+    private void handleJoinGame(JsonObject payload) {
+        String gameId = payload.get("gameCode").getAsString();
+        try {
+            Player player = lobbyService.joinGame(authenticatedUserId, gameId);
+            this.currentGameCode = gameId;
+            JsonObject resp = new JsonObject();
+            resp.addProperty("gameCode", gameId);
+            send(MessageType.GAME_CODE, resp);
+        } catch (Exception e) {
+            sendError(e.getMessage());
+        }
+    }
+
+    
+
+    private void handleGetGameInfo(JsonObject payload) {
+        String gameCode = payload.get("gameCode").getAsString();
+        Game game = lobbyService.getGameById(gameCode); 
+        if (game == null) {
+            sendError("Sala não encontrada");
+            return;
+        }
+        JsonObject resp = new JsonObject();
+        resp.addProperty("playerCount", game.getPlayers().size());
+        resp.addProperty("maxPlayers", game.getMaxPlayers());
+        resp.addProperty("isOwner", game.getOwnerId().equals(authenticatedUserId)); // se tiver owner
+        send(MessageType.GAME_UPDATE, resp);
+    }
+
+    private void handleLeaveGame(JsonObject payload) {
+        String gameCode = payload.get("gameCode").getAsString();
+        lobbyService.leaveGame(authenticatedUserId, gameCode);
+        send(MessageType.GAME_UPDATE, new JsonObject()); // ou apenas confirmação
+    }
+
+    private void handleStartGame(JsonObject payload) {
+        String gameCode = payload.get("gameCode").getAsString();
+        // Verificar se é o owner e número mínimo de jogadores
+        Game game = lobbyService.getGameById(gameCode);
+        if (game == null || !game.getOwnerId().equals(authenticatedUserId)) {
+            sendError("Apenas o criador pode iniciar");
+            return;
+        }
+        if (game.getPlayers().size() < 3) {
+            sendError("Mínimo de 3 jogadores necessário");
+            return;
+        }
+        // Chama o serviço de jogo para iniciar a partida
+        lobbyService.startGame(gameCode);
     }
 
     private void cleanup() {
