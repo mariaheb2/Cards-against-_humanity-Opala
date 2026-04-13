@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Lobby - Cards Against Humanity</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="lobby-container">
+        <div class="lobby-header">
+            <h2> Salão de Jogos</h2>
+            <div class="user-info">
+                <span id="lobby-username"></span>
+            </div>
+        </div>
+
+        <div class="lobby-content">
+            <div class="online-users">
+                <h3>Players Online</h3>
+                <ul id="online-list" class="online-list"></ul>
+            </div>
+            <div class="create-game-panel">
+                <h3>Criar Partida</h3>
+                <div class="input-group">
+                    <label>Máximo de jogadores</label>
+                    <input type="number" id="max-players" min="2" max="8" value="6">
+                </div>
+                <div class="input-group">
+                    <label>Pontuação alvo</label>
+                    <input type="number" id="target-score" min="3" max="15" value="8">
+                </div>
+                <button id="create-game-btn" class="btn-primary">Criar Sala</button>
+            </div>
+            <div class="game-code-panel">
+                <h3>Sala Atual</h3>
+                <div id="game-code-display" class="game-code">Nenhuma sala</div>
+                <div class="input-group">
+                    <label>Entrar em sala pelo código</label>
+                    <input type="text" id="join-code" placeholder="Código da sala">
+                    <button id="join-game-btn" class="btn-secondary">Entrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/global.js"></script>
+    <script src="js/lobby.js"></script>
+    <script src="js/menu.js"></script>
+</body>
+</html>
