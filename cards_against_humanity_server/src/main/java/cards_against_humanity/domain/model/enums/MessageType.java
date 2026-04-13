@@ -27,6 +27,7 @@ public enum MessageType {
 
     JOIN_GAME,
     PLAYER_JOINED,
+    PLAYER_LEFT,
 
     START_GAME,
     GAME_STARTED,
