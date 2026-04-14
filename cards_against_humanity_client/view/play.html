@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jogo — Cards Against Humanity. Responda as perguntas mais absurdas com as piores respostas possíveis.">
+    <title>Jogo - Cards Against Humanity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="play-body">
+
+    <!-- ── HUD Superior ─────────────────────────────────────────── -->
+    <header class="play-hud" id="play-hud">
+        <div class="hud-left">
+            <span class="hud-label">Rodada</span>
+            <span class="hud-value" id="hud-round">―</span>
+        </div>
+        <div class="hud-center">
+            <span class="game-title-hud">♠ Cards Against Humanity</span>
+        </div>
+        <div class="hud-right">
+            <span class="hud-label">Juiz</span>
+            <span class="hud-value hud-judge" id="hud-judge">―</span>
+        </div>
+    </header>
+
+    <!-- ── Layout principal ─────────────────────────────────────── -->
+    <main class="play-main" id="play-main">
+
+        <!-- Coluna esquerda: Placar -->
+        <aside class="play-scoreboard" id="play-scoreboard">
+            <h3 class="scoreboard-title">🏆 Placar</h3>
+            <ul class="scoreboard-list" id="scoreboard-list">
+                <li class="scoreboard-empty">Aguardando jogadores...</li>
+            </ul>
+        </aside>
+
+        <!-- Centro: Área de jogo -->
+        <section class="play-center" id="play-center">
+
+            <!-- Carta preta (pergunta) -->
+            <div class="question-area" id="question-area">
+                <div class="black-card" id="black-card">
+                    <div class="black-card-text" id="black-card-text">Aguardando a próxima rodada...</div>
+                    <div class="black-card-footer">
+                        <span>Cards Against Humanity</span>
+                        <span class="black-card-icon">♠</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status: aguardando jogadas -->
+            <div class="play-status" id="play-status">
+                <div class="players-played-row">
+                    <span class="status-label" id="status-label">Aguardando início...</span>
+                    <div class="players-played-dots" id="players-played-dots"></div>
+                </div>
+            </div>
+
+            <!-- Área do juiz: cartas jogadas para selecionar -->
+            <div class="judge-area" id="judge-area" style="display:none">
+                <h3 class="judge-area-title">
+                    <span id="judge-area-label">⚖️ Selecione a melhor resposta</span>
+                </h3>
+                <div class="played-cards-grid" id="played-cards-grid"></div>
+            </div>
+
+        </section>
+
+        <!-- Direita: nenhuma coluna extra (a mão ocupa o bottom) -->
+    </main>
+
+    <!-- ── Mão do jogador (bottom tray) ─────────────────────────── -->
+    <div class="hand-tray" id="hand-tray">
+        <div class="hand-tray-header">
+            <span class="hand-label" id="hand-label">Suas cartas</span>
+            <span class="hand-hint" id="hand-hint">Selecione uma carta para jogar</span>
+        </div>
+        <div class="hand-cards" id="hand-cards"></div>
+    </div>
+
+    <!-- ── Modal: Resultado da rodada ───────────────────────────── -->
+    <div class="modal-overlay" id="round-result-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Resultado da rodada">
+        <div class="modal-card round-result-modal">
+            <div class="modal-icon">🎉</div>
+            <h2 class="modal-title">Rodada vencida!</h2>
+            <p class="modal-winner-name" id="round-winner-name"></p>
+            <div class="modal-winning-card" id="round-winning-card"></div>
+            <div class="modal-scores" id="round-scores"></div>
+            <button class="btn-primary modal-btn" id="round-next-btn">Próxima rodada →</button>
+        </div>
+    </div>
+
+    <!-- ── Modal: Fim de jogo ────────────────────────────────────── -->
+    <div class="modal-overlay" id="game-finished-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Fim de jogo">
+        <div class="modal-card game-finished-modal">
+            <div class="confetti-area" id="confetti-area"></div>
+            <div class="modal-icon trophy-icon">🏆</div>
+            <h2 class="modal-title">Jogo encerrado!</h2>
+            <p class="modal-subtitle">Vencedor geral</p>
+            <p class="modal-winner-name final-winner" id="game-winner-name"></p>
+            <div class="final-scores-table" id="final-scores-table"></div>
+            <div class="modal-actions">
+                <button class="btn-primary modal-btn" id="play-again-btn">Jogar novamente</button>
+                <button class="btn-secondary modal-btn" id="back-lobby-btn">Voltar ao Lobby</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Overlay de loading ────────────────────────────────────── -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text" id="loading-text">Conectando ao servidor...</p>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/global.js"></script>
+    <script src="js/play.js"></script>
+    <script src="js/menu.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
-# Cards Against Humanity — Servidor TCP
+# Cards Against Humanity — Multiplayer Completo
 
-Implementação de um servidor multiplayer para o jogo **Cards Against Humanity** usando Java 17, sockets TCP e arquitetura orientada a eventos (Event Bus).
+Implementação completa (Servidor TCP em Java 17 e Web Client em HTML/JS) do jogo **Cards Against Humanity** utilizando arquitetura orientada a eventos (Event Bus) e WebSockets.
 
 ---
 
@@ -11,7 +11,7 @@ Implementação de um servidor multiplayer para o jogo **Cards Against Humanity*
 - [Pré-requisitos](#pré-requisitos)
 - [Configuração do banco de dados](#configuração-do-banco-de-dados)
 - [Configuração do servidor](#configuração-do-servidor)
-- [Como compilar e executar](#como-compilar-e-executar)
+- [Como executar (Servidor e Cliente)](#como-executar-servidor-e-cliente)
 - [Populando as cartas](#populando-as-cartas)
 - [Protocolo de comunicação](#protocolo-de-comunicação)
 - [Fluxo de jogo](#fluxo-de-jogo)
@@ -40,11 +40,14 @@ O servidor gerencia múltiplas partidas simultâneas via conexões TCP. Cada cli
 
 ## Arquitetura
 
-```
-Cliente TCP
-    │
-    ▼
-ClientHandler  ──►  EventBus  ──►  GameEventHandler
+```text
+Navegador Web (Web UI)
+       │ (WebSocket)
+       ▼
+  Node.js Proxy (ws -> TCP)
+       │ (TCP Sockets)
+       ▼
+ Java: ClientHandler  ──►  EventBus  ──►  GameEventHandler
     │                                   │
     │  (auth)                    ┌──────┴──────┐
     ▼                            ▼             ▼
@@ -64,6 +67,7 @@ AuthService                LobbyService   GameService
 | Java (JDK) | 17 | `java -version` |
 | Maven | 3.9+ | `mvn -version` |
 | MySQL | 8.0+ | `mysql --version` |
+| Node.js | 18+ | `node -v` |
 
 ---
 
@@ -131,7 +135,9 @@ server.charset=UTF-8
 
 ---
 
-## Como compilar e executar
+## Como executar (Servidor e Cliente)
+
+### 1. Iniciar o Servidor (Java)
 
 Todos os comandos abaixo devem ser executados dentro do diretório do servidor:
 
@@ -139,7 +145,7 @@ Todos os comandos abaixo devem ser executados dentro do diretório do servidor:
 cd cards_against_humanity_server
 ```
 
-### Opção 1 — Desenvolvimento (recomendado)
+#### Desenvolvimento (recomendado)
 
 Compila e executa diretamente via Maven, sem gerar JAR:
 
@@ -151,7 +157,7 @@ mvn compile exec:java -Dexec.mainClass="cards_against_humanity.Main"
 mvn compile exec:java "-Dexec.mainClass=cards_against_humanity.Main"
 ```
 
-### Opção 2 — Produção (JAR executável)
+#### Produção (JAR executável)
 
 Gera o JAR e executa. **Requer** o plugin `maven-assembly-plugin` ou `maven-shade-plugin` para empacotar as dependências. Com o `pom.xml` atual, use:
 
@@ -176,6 +182,32 @@ INFO: Server is running on port 8080. Press Ctrl+C to stop.
 ```
 
 Para parar o servidor, pressione **`Ctrl+C`** — o shutdown hook garante encerramento gracioso de todas as conexões.
+
+### 2. Iniciar o Cliente Web (Node.js)
+
+Em um **segundo terminal**, entre no diretório do cliente e instale as dependências:
+
+```bash
+cd cards_against_humanity_client
+npm install
+```
+
+Inicie o proxy WebSocket e o servidor HTTP (onde o jogo rodará):
+
+```bash
+npm start
+```
+
+Você verá as mensagens:
+```text
+🔌 WebSocket proxy on port 3000 -> TCP localhost:8080
+📄 HTTP server serving static files at http://localhost:8082
+```
+
+Agora, abra seu navegador (Google Chrome, Firefox, etc.) e acesse:
+👉 **`http://localhost:8082`**
+
+*(Dica: Abra esta URL em duas ou mais abas diferentes para simular jogadores diferentes conectando-se à mesma partida!)*
 
 ---
 
@@ -438,8 +470,12 @@ telnet localhost 8080
 
 ## Estrutura do projeto
 
-```
-cards_against_humanity_server/
+```text
+├── cards_against_humanity_client/             # Frontend Web
+│   ├── package.json                           # npm dependências
+│   ├── proxy.js                               # Proxy WebSockets <-> TCP + HTTP server
+│   └── view/                                  # HTML, CSS, JS estático do jogo Web
+├── cards_against_humanity_server/             # Backend Java TCP Server
 ├── pom.xml                                    # Dependências Maven (Java 17, Hibernate 6, MySQL)
 ├── src/
 │   ├── main/

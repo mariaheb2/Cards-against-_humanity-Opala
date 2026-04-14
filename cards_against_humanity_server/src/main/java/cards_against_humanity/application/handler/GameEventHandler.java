@@ -151,6 +151,17 @@ public class GameEventHandler {
                 return;
             }
 
+            // Verificar permissões e número mínimo de jogadores
+            Game preGame = gameRepository.findById(gameId).orElseThrow(() -> new IllegalArgumentException("Game not found"));
+            if (!preGame.getOwnerId().equals(userId)) {
+                sendError(clientId, "Apenas o criador pode iniciar");
+                return;
+            }
+            if (lobbyService.getPlayersInGame(gameId).size() < 3) {
+                sendError(clientId, "Mínimo de 3 jogadores necessário");
+                return;
+            }
+
             // Inicia jogo e obtém a carta-pergunta da primeira rodada
             Card questionCard = lobbyService.startGame(gameId);
 
@@ -244,6 +255,9 @@ public class GameEventHandler {
 
             Player winner = gameService.selectWinner(gameId, playedCardId);
 
+            PlayedCard winningCard = playedCardRepository.findById(playedCardId).orElse(null);
+            String winningText = winningCard != null ? winningCard.getCard().getText() : "Carta Vencedora";
+
             // Re-busca o estado atual (pode ser GAME_FINISHED ou PLAYERS_PLAYING)
             Game game = gameRepository.findById(gameId).orElseThrow();
             List<Player> players = playerRepository.findByGameId(gameId);
@@ -251,6 +265,7 @@ public class GameEventHandler {
 
             // Broadcast resultado da rodada
             JsonObject roundResult = new JsonObject();
+            roundResult.addProperty("winningCardText", winningText);
             roundResult.addProperty("winnerId", winner.getId());
             roundResult.addProperty("username", winner.getUser().getUsername());
             roundResult.addProperty("score", winner.getScore());
@@ -260,14 +275,18 @@ public class GameEventHandler {
             if (game.getState() == GameState.GAME_FINISHED) {
                 // Jogo encerrado
                 JsonObject finishedPayload = new JsonObject();
+                finishedPayload.addProperty("winningCardText", winningText);
                 finishedPayload.addProperty("winnerId", winner.getId());
                 finishedPayload.addProperty("username", winner.getUser().getUsername());
                 finishedPayload.add("finalScores", scoresArray);
                 broadcastToGame(gameId, buildMessage("GAME_FINISHED", finishedPayload));
                 LOGGER.info("Game finished: " + gameId + " — Winner: " + winner.getUser().getUsername());
             } else {
-                // Nova rodada já foi iniciada por GameService.endRound → startNewRound
-                Card questionCard = game.getCurrentQuestion();
+                // Nova rodada: chamamos de forma sequencial limpa
+                Card questionCard = gameService.startNewRound(gameId);
+                
+                // Re-busca com o novo juiz, rodada, estado
+                game = gameRepository.findById(gameId).orElseThrow();
                 sendNewRound(game, questionCard);
             }
 

@@ -2,8 +2,10 @@
     // Só executa se não tiver sido inserido ainda
     if (document.getElementById('global-header')) return;
 
+    const isPlayPage = window.location.pathname.includes('play.html');
+
     // HTML do header fixo no topo
-    const menuButton = `
+    const menuButton = isPlayPage ? '' : `
         <button id="menu-toggle-btn" class="menu-toggle">☰</button>
     `;
     const logoLink = `
@@ -49,7 +51,17 @@
         drawer.classList.remove('open');
         overlay.classList.remove('active');
     }
-    menuBtn.addEventListener('click', openDrawer);
+    if (menuBtn) {
+        menuBtn.addEventListener('click', openDrawer);
+    }
+    if (isPlayPage) {
+        // Usa o texto do HUD como botão de menu
+        const hudTitle = document.querySelector('.game-title-hud');
+        if (hudTitle) {
+            hudTitle.style.cursor = 'pointer';
+            hudTitle.addEventListener('click', openDrawer);
+        }
+    }
     if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
     overlay.addEventListener('click', closeDrawer);
 
