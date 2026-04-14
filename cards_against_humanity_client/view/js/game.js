@@ -107,6 +107,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 break;
 
+            case 'NEW_ROUND':
+                // O servidor envia NEW_ROUND logo após GAME_STARTED.
+                // Como teremos uma transição de página que derruba o WebSocket, 
+                // guardamos o payload para ser lido pelo play.js assim que conectar.
+                sessionStorage.setItem('initialRoundData', JSON.stringify(msg.payload));
+                break;
+
             case 'ERROR':
                 console.error('[game.js] Erro server:', msg.payload.message);
                 // Mostra como alert apenas erros criticos de sala

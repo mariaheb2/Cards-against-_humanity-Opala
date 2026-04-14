@@ -73,8 +73,8 @@ public class GameService {
      */
     public Card startNewRound(String gameId) {
         return transaction.execute(em -> {
-            Game game = gameRepository.findById(gameId)
-                    .orElseThrow(() -> new IllegalArgumentException("Game not found"));
+            Game game = em.find(Game.class, gameId);
+            if (game == null) throw new IllegalArgumentException("Game not found");
 
             if (game.getState() != GameState.STARTING &&
                 game.getState() != GameState.ROUND_FINISHED) {
@@ -137,15 +137,15 @@ public class GameService {
      */
     public void playCard(String gameId, String playerId, String cardId) {
         transaction.executeVoid(em -> {
-            Game game = gameRepository.findById(gameId)
-                    .orElseThrow(() -> new IllegalArgumentException("Game not found"));
+            Game game = em.find(Game.class, gameId);
+            if (game == null) throw new IllegalArgumentException("Game not found");
 
             if (game.getState() != GameState.PLAYERS_PLAYING) {
                 throw new IllegalStateException("Cannot play card now. Game state: " + game.getState());
             }
 
-            Player player = playerRepository.findById(playerId)
-                    .orElseThrow(() -> new IllegalArgumentException("Player not found"));
+            Player player = em.find(Player.class, playerId);
+            if (player == null) throw new IllegalArgumentException("Player not found");
 
             if (player.isJudge()) {
                 throw new IllegalStateException("Judge cannot play a card");
@@ -153,7 +153,7 @@ public class GameService {
 
             // Verifica se o jogador já jogou nesta rodada
             boolean alreadyPlayed = playedCardRepository.findByGameId(gameId).stream()
-                    .anyMatch(pc -> pc.getPlayer().getId().equals(playerId) && !pc.isWinner());
+                    .anyMatch(pc -> pc.getPlayer().getId().equals(playerId) && pc.getRoundNumber() == game.getRound());
             if (alreadyPlayed) {
                 throw new IllegalStateException("Player already played this round");
             }
@@ -209,15 +209,15 @@ public class GameService {
      */
     public Player selectWinner(String gameId, String playedCardId) {
         return transaction.execute(em -> {
-            Game game = gameRepository.findById(gameId)
-                    .orElseThrow(() -> new IllegalArgumentException("Game not found"));
+            Game game = em.find(Game.class, gameId);
+            if (game == null) throw new IllegalArgumentException("Game not found");
 
             if (game.getState() != GameState.JUDGE_SELECTING) {
                 throw new IllegalStateException("Cannot select winner now");
             }
 
-            PlayedCard winningCard = playedCardRepository.findById(playedCardId)
-                    .orElseThrow(() -> new IllegalArgumentException("PlayedCard not found"));
+            PlayedCard winningCard = em.find(PlayedCard.class, playedCardId);
+            if (winningCard == null) throw new IllegalArgumentException("PlayedCard not found");
 
             if (!winningCard.getGame().getId().equals(gameId)) {
                 throw new IllegalArgumentException("Card does not belong to this game");
@@ -234,42 +234,14 @@ public class GameService {
             // Verifica se atingiu pontuação alvo
             if (winnerPlayer.getScore() >= game.getTargetScore()) {
                 game.setState(GameState.GAME_FINISHED);
-                gameRepository.save(game);
-                return winnerPlayer;
             } else {
                 game.setState(GameState.ROUND_FINISHED);
-                gameRepository.save(game);
-                endRound(gameId);
-                return winnerPlayer;
             }
+            return winnerPlayer;
         });
     }
 
-    /**
-     * Finaliza a rodada atual e, se o jogo ainda não terminou, inicia uma nova rodada.
-     *
-     * <p>Este método é chamado automaticamente após a seleção do vencedor quando
-     * o jogo não terminou. O estado do jogo deve ser {@code ROUND_FINISHED}.
-     *
-     * @param gameId ID da partida
-     * @throws IllegalArgumentException se a partida não existir
-     * @throws IllegalStateException    se o estado do jogo não for {@code ROUND_FINISHED}
-     */
-    public void endRound(String gameId) {
-        transaction.executeVoid(em -> {
-            Game game = gameRepository.findById(gameId)
-                    .orElseThrow(() -> new IllegalArgumentException("Game not found"));
 
-            if (game.getState() != GameState.ROUND_FINISHED) {
-                throw new IllegalStateException("Round is not finished");
-            }
-
-            // Se o jogo não terminou, inicia nova rodada
-            if (game.getState() != GameState.GAME_FINISHED) {
-                startNewRound(gameId);
-            }
-        });
-    }
 
     /**
      * Garante que um jogador tenha exatamente 5 cartas resposta na mão.
@@ -320,18 +292,23 @@ public class GameService {
         if (players.isEmpty()) {
             throw new IllegalStateException("No players in game");
         }
+        // Atualiza o atributo isJudge de todos
+        players.forEach(p -> p.setJudge(false));
+
         Player currentJudge = game.getCurrentJudge();
+        Player nextJudge;
+        
         if (currentJudge == null) {
             // Primeira rodada: juiz aleatório
             int randomIndex = (int) (Math.random() * players.size());
-            return players.get(randomIndex);
+            nextJudge = players.get(randomIndex);
+        } else {
+            // Ordem circular
+            int currentIndex = players.indexOf(currentJudge);
+            int nextIndex = (currentIndex + 1) % players.size();
+            nextJudge = players.get(nextIndex);
         }
-        // Ordem circular
-        int currentIndex = players.indexOf(currentJudge);
-        int nextIndex = (currentIndex + 1) % players.size();
-        Player nextJudge = players.get(nextIndex);
-        // Atualiza o atributo isJudge de todos
-        players.forEach(p -> p.setJudge(false));
+        
         nextJudge.setJudge(true);
         return nextJudge;
     }

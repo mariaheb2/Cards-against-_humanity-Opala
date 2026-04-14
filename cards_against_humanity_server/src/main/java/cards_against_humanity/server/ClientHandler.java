@@ -160,7 +160,11 @@ public class ClientHandler implements Runnable {
                     handleLeaveGame(payload);
                     break;
                 case START_GAME:
-                    handleStartGame(payload);
+                    if (authenticatedUserId == null) {
+                        sendError("Not authenticated. Please login first.");
+                    } else {
+                        dispatchGameEvent(type, payload);
+                    }
                     break;
                 default:
                     // Para mensagens de jogo, exige autenticação
@@ -403,45 +407,8 @@ public class ClientHandler implements Runnable {
         send(MessageType.GAME_UPDATE, new JsonObject()); // ou apenas confirmação
     }
 
-    private void handleStartGame(JsonObject payload) {
-        // Aceita tanto 'gameCode' quanto 'gameId'
-        String gameCode = payload.has("gameCode")
-                ? payload.get("gameCode").getAsString()
-                : (payload.has("gameId") ? payload.get("gameId").getAsString() : null);
-        if (gameCode == null) {
-            sendError("gameCode or gameId is required");
-            return;
-        }
-
-        // Verificar se é o owner
-        Game game = lobbyService.getGameById(gameCode);
-        if (game == null || !game.getOwnerId().equals(authenticatedUserId)) {
-            sendError("Apenas o criador pode iniciar");
-            return;
-        }
-
-        // Verificar número mínimo de jogadores
-        java.util.List<Player> players = lobbyService.getPlayersInGame(gameCode);
-        if (players.size() < 3) {
-            sendError("Mínimo de 3 jogadores necessário");
-            return;
-        }
-
-        try {
-            // Inicia o jogo (muda estado, sorteia carta, distribui mãos)
-            lobbyService.startGame(gameCode);
-
-            // Broadcast GAME_STARTED para TODOS os jogadores na sala
-            JsonObject startedPayload = new JsonObject();
-            startedPayload.addProperty("gameId", gameCode);
-            broadcastToGame(gameCode, MessageType.GAME_STARTED, startedPayload);
-
-            LOGGER.info("[" + clientId + "] Game started by owner: " + gameCode);
-        } catch (Exception e) {
-            LOGGER.warning("[" + clientId + "] Error starting game: " + e.getMessage());
-            sendError(e.getMessage());
-        }
-    }
+    // handleStartGame removido para delegar o START_GAME ao GameEventHandler,
+    // garantindo que os usuários recebam NEW_ROUND apropriadamente.
 
     /**
      * Envia uma mensagem para todos os jogadores de uma sala.

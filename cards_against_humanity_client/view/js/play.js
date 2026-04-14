@@ -1,7 +1,7 @@
 // play.js — lógica completa da página do jogo em tempo real
 document.addEventListener('DOMContentLoaded', async () => {
 
-    // ── Parâmetros da URL ─────────────────────────────────────────
+    // Parâmetros da URL
     const urlParams = new URLSearchParams(window.location.search);
     const gameId = urlParams.get('gameId');
 
@@ -11,24 +11,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // ── Estado local ──────────────────────────────────────────────
-    let myUserId      = window.gameClient.userId || localStorage.getItem('userId');
-    let myUsername    = window.gameClient.username || localStorage.getItem('username');
-    let isJudge       = false;
+    // Estado local
+    let myUserId = window.gameClient.userId || localStorage.getItem('userId');
+    let myUsername = window.gameClient.username || localStorage.getItem('username');
+    let isJudge = false;
     let selectedCardId = null;    // carta branca selecionada
-    let currentRound  = 0;
-    let hasPlayed     = false;    // já jogou nesta rodada
-    let scores        = {};       // { playerId: { username, score } }
-    let playerDots    = {};       // { playerId: played:bool }
+    let currentRound = 0;
+    let hasPlayed = false;    // já jogou nesta rodada
+    let scores = {};       // { playerId: { username, score } }
+    let playerDots = {};       // { playerId: played:bool }
 
-    // ── Conectar WebSocket ────────────────────────────────────────
+    // Conectar WebSocket 
     showLoading('Conectando ao servidor...');
     try {
         if (!window.gameClient.ws || window.gameClient.ws.readyState !== WebSocket.OPEN) {
             await window.gameClient.connect();
         }
         window.gameClient.restoreSession();
-        myUserId   = window.gameClient.userId   || localStorage.getItem('userId');
+        myUserId = window.gameClient.userId || localStorage.getItem('userId');
         myUsername = window.gameClient.username || localStorage.getItem('username');
     } catch (err) {
         hideLoading();
@@ -41,53 +41,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     await delay(400);
     hideLoading();
 
-    // ── Escutar mensagens do servidor ─────────────────────────────
+    // Recuperar dados da rodada inicial (da transição do game.js)
+    const savedRoundData = sessionStorage.getItem('initialRoundData');
+    if (savedRoundData) {
+        try {
+            console.log('[play.js] Recuperando dados da primeira rodada via sessionStorage');
+            const parsed = JSON.parse(savedRoundData);
+            onNewRound(parsed);
+        } catch (e) {
+            console.error('Erro ao processar initialRoundData:', e);
+        }
+        sessionStorage.removeItem('initialRoundData');
+    }
+
+    // Escutar mensagens do servidor 
     window.addEventListener('gameMessage', (e) => {
         const msg = e.detail;
         console.log('[play.js] msg:', msg.type, msg.payload);
 
         switch (msg.type) {
 
-            // ── Início de nova rodada ─────────────────────────────
+            // Início de nova rodada 
             case 'NEW_ROUND':
                 onNewRound(msg.payload);
                 break;
 
-            // ── Alguém jogou uma carta ────────────────────────────
+            // Alguém jogou uma carta 
             case 'PLAYER_PLAYED':
                 onPlayerPlayed(msg.payload);
                 break;
 
-            // ── Todos jogaram → juiz escolhe ─────────────────────
+            // Todos jogaram → juiz escolhe 
             case 'JUDGE_SELECTING':
                 onJudgeSelecting(msg.payload);
                 break;
 
-            // ── Resultado da rodada ───────────────────────────────
+            // Resultado da rodada 
             case 'ROUND_RESULT':
                 onRoundResult(msg.payload);
                 break;
 
-            // ── Fim de jogo ───────────────────────────────────────
+            // Fim de jogo 
             case 'GAME_FINISHED':
                 onGameFinished(msg.payload);
                 break;
 
-            // ── Erros ─────────────────────────────────────────────
+            // Erros
             case 'ERROR':
                 showError(msg.payload.message);
                 break;
         }
     });
 
-    // ── Handlers dos eventos de jogo ──────────────────────────────
+    // Handlers dos eventos de jogo
 
     function onNewRound(payload) {
-        currentRound  = payload.round;
-        isJudge       = payload.isJudge;
-        hasPlayed     = false;
+        currentRound = payload.round;
+        isJudge = payload.isJudge;
+        hasPlayed = false;
         selectedCardId = null;
-        playerDots    = {};
+        playerDots = {};
 
         // Atualiza HUD
         setHUDRound(currentRound);
@@ -104,6 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!isJudge) {
             renderHand(payload.hand);
             setHandHint('Selecione uma carta para jogar');
+            document.getElementById('hand-label').innerHTML = 'Suas cartas';
         } else {
             renderHand([]); // juiz não joga
             setHandHint('Você é o juiz desta rodada — aguarde as respostas!');
@@ -125,13 +139,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function onJudgeSelecting(payload) {
         if (isJudge) {
-            // Mostre área de seleção ao juiz
-            showJudgeArea(payload.playedCards, payload.gameId);
+            const area = document.getElementById('judge-area');
+            const grid = document.getElementById('played-cards-grid');
+            const label = document.getElementById('judge-area-label');
+
+            label.innerHTML = '<button id="btn-reveal-cards" class="btn-primary" style="margin-top: 10px;">Revelar Respostas Anonimas</button>';
+            grid.innerHTML = '';
+
+            area.style.display = 'block';
+            area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            document.getElementById('play-status').style.display = 'none';
+
+            document.getElementById('btn-reveal-cards').addEventListener('click', () => {
+                showJudgeArea(payload.playedCards, payload.gameId);
+            });
         } else {
             // Jogadores comuns veem mensagem de espera
             setHandHint('⏳ Aguardando o juiz escolher a melhor resposta...');
             disableHand();
-            setStatusLabel('⚖️ Juiz escolhendo...');
+            setStatusLabel('⚖️ Juiz avaliando as respostas...');
         }
     }
 
@@ -157,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showGameFinishedModal(payload);
     }
 
-    // ── Renderização: cartas da mão ───────────────────────────────
+    // Renderização: cartas da mão 
 
     function renderHand(hand) {
         const container = document.getElementById('hand-cards');
@@ -218,7 +244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // ── Renderização: área do juiz ────────────────────────────────
+    // Renderização: área do juiz 
 
     function showJudgeArea(playedCards, gId) {
         const area = document.getElementById('judge-area');
@@ -284,11 +310,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ── Modais ────────────────────────────────────────────────────
+    // Modais
 
     function showRoundResultModal(payload) {
         document.getElementById('round-winner-name').textContent =
             `🎉 ${payload.username} venceu com ${payload.score} ponto(s)!`;
+
+        // Mostrar a carta escolhida
+        const winningCardArea = document.getElementById('round-winning-card');
+        if (winningCardArea) {
+            winningCardArea.innerHTML = `
+                <div class="white-card">
+                    <div class="white-card-text">${payload.winningCardText || '...'}</div>
+                    <div class="white-card-footer">
+                        <span>Cards Against Humanity</span>
+                        <span class="white-card-icon">♠</span>
+                    </div>
+                </div>
+            `;
+        }
 
         // Mostra placar no modal
         const scoresEl = document.getElementById('round-scores');
@@ -340,7 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </table>`;
     }
 
-    // ── Placar lateral ────────────────────────────────────────────
+    // Placar lateral
 
     function renderScoreboard() {
         const list = document.getElementById('scoreboard-list');
@@ -363,7 +403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ── HUD helpers ───────────────────────────────────────────────
+    // HUD helpers 
 
     function setHUDRound(r) {
         document.getElementById('hud-round').textContent = r;
@@ -422,7 +462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         label.innerHTML = '⚖️ <span class="judge-badge">Você é o Juiz</span>';
     }
 
-    // ── Loading overlay ───────────────────────────────────────────
+    // Loading overlay 
 
     function showLoading(text) {
         const ov = document.getElementById('loading-overlay');
@@ -447,7 +487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 4000);
     }
 
-    // ── Confetti ──────────────────────────────────────────────────
+    // Confetti
 
     function spawnConfetti() {
         const area = document.getElementById('confetti-area');
@@ -463,7 +503,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // ── Utilitários ───────────────────────────────────────────────
+    // Utilitários
 
     function delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
