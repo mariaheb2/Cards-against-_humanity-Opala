@@ -4,11 +4,6 @@ window.gameClient = {
     userId: null,
     username: null,
 
-    async hashPassword(password) {
-        const msgBuffer = new TextEncoder().encode(password);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    },
     logout() {
         if (this.ws) {
             this.ws.close();
@@ -91,13 +86,11 @@ window.gameClient = {
         const event = new CustomEvent('gameMessage', { detail: msg });
         window.dispatchEvent(event);
     },
-    async register(username, email, password) {
-        const hashedPassword = await this.hashPassword(password);
-        this.send('REGISTER', { username, email, password: hashedPassword });
+    register(username, email, password) {
+        this.send('REGISTER', { username, email, password });
     },
 
-    async login(email, password) {
-        const hashedPassword = await this.hashPassword(password);
-        this.send('LOGIN', { email, password: hashedPassword });
+    login(email, password) {
+        this.send('LOGIN', { email, password });
     }
 };
