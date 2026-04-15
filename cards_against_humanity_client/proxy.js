@@ -4,14 +4,12 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const WS_PORT = 3000;
-const TCP_HOST = 'localhost';
-const TCP_PORT = 8080;
-const HTTP_PORT = 8082;
+// Portas e hosts agora vêm de variáveis de ambiente (com fallback para localhost)
+const PORT = process.env.HTTP_PORT || 8082;        // porta única (HTTP + WebSocket)
+const TCP_HOST = process.env.TCP_HOST || 'localhost';
+const TCP_PORT = process.env.TCP_PORT || 8080;
 
-// ─────────────────────────────────────────────────────────────
-// Servidor HTTP para arquivos estáticos (HTML, CSS, JS)
-// ─────────────────────────────────────────────────────────────
+// MIME types para arquivos estáticos
 const mimeTypes = {
     '.html': 'text/html',
     '.css': 'text/css',
@@ -19,10 +17,10 @@ const mimeTypes = {
     '.json': 'application/json',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
-    '.ico': 'image/x-icon'
 };
 
-const httpServer = http.createServer((req, res) => {
+// Cria um servidor HTTP único
+const server = http.createServer((req, res) => {
     let filePath = req.url === '/' ? '/login.html' : req.url.split('?')[0];
     filePath = path.join(__dirname, 'view', filePath);
     const ext = path.extname(filePath).toLowerCase();
@@ -44,16 +42,11 @@ const httpServer = http.createServer((req, res) => {
     });
 });
 
-httpServer.listen(HTTP_PORT, () => {
-    console.log(`📄 HTTP server serving static files at http://localhost:${HTTP_PORT}`);
-});
+// Anexa o WebSocket ao mesmo servidor HTTP
+const wss = new WebSocket.Server({ server });
 
-// ─────────────────────────────────────────────────────────────
-// Servidor WebSocket (proxy para TCP)
-// ─────────────────────────────────────────────────────────────
-const wss = new WebSocket.Server({ port: WS_PORT });
-
-console.log(`🔌 WebSocket proxy on port ${WS_PORT} -> TCP ${TCP_HOST}:${TCP_PORT}`);
+console.log(`🔌 WebSocket proxy integrado ao servidor HTTP na porta ${PORT}`);
+console.log(`🔄 Proxy TCP para ${TCP_HOST}:${TCP_PORT}`);
 
 wss.on('connection', (ws, req) => {
     const clientAddr = req.socket.remoteAddress;
@@ -111,6 +104,6 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-wss.on('error', (err) => {
-    console.error('[WS] Erro no WebSocket:', err);
+server.listen(PORT, () => {
+    console.log(` Servidor HTTP + WebSocket rodando na porta ${PORT}`);
 });
