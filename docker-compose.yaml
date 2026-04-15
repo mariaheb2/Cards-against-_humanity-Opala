@@ -23,8 +23,6 @@ services:
   java-server:
     build: ./cards_against_humanity_server
     container_name: back-java-server
-    ports:
-      - "8080:8080"
     restart: unless-stopped
     networks:
       - cards-network
