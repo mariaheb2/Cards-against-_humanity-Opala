@@ -12,6 +12,7 @@ services:
       MYSQL_PASSWORD: 123
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
     networks:
       - cards-network
     healthcheck:

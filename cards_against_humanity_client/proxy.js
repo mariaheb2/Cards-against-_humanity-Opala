@@ -4,7 +4,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-// Portas e hosts agora vêm de variáveis de ambiente (com fallback para localhost)
 const PORT = process.env.HTTP_PORT || 8082;        // porta única (HTTP + WebSocket)
 const TCP_HOST = process.env.TCP_HOST || 'localhost';
 const TCP_PORT = process.env.TCP_PORT || 8080;
