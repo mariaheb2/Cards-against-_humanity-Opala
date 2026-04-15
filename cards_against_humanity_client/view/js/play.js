@@ -1,4 +1,3 @@
-// play.js — lógica completa da página do jogo em tempo real
 document.addEventListener('DOMContentLoaded', async () => {
 
     // Parâmetros da URL
