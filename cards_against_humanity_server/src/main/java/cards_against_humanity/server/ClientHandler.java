@@ -175,7 +175,7 @@ public class ClientHandler implements Runnable {
                     }
             }
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error processing message", e);
+            LOGGER.warning("[" + clientId + "] Error processing message: " + e.getMessage());
             sendError("Invalid message format or internal error: " + e.getMessage());
         }
     }
