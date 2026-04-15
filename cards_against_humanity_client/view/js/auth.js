@@ -37,8 +37,11 @@ window.gameClient = {
         return Promise.resolve();
     }
 
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+
     return new Promise((resolve, reject) => {
-        this.ws = new WebSocket('ws://localhost:3000');
+        this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
             console.log('WebSocket conectado');

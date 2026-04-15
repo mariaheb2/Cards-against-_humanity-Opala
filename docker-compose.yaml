@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  mysql-db:
+    image: mysql:8.0
+    container_name: cards-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123     
+      MYSQL_DATABASE: cards_db
+      MYSQL_USER: game
+      MYSQL_PASSWORD: 123
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - cards-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  java-server:
+    build: ./cards_against_humanity_server
+    container_name: back-java-server
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - cards-network
+    environment:
+      - DB_HOST=mysql-db
+      - DB_PORT=3306
+      - DB_NAME=cards_db
+      - DB_USER=game
+      - DB_PASSWORD=123
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+
+  node-proxy:
+    build: ./cards_against_humanity_client
+    container_name: front-node-proxy
+    ports:
+      - "8082:8082"
+    depends_on:
+      - java-server
+    environment:
+      - TCP_HOST=java-server
+      - TCP_PORT=8080
+      - HTTP_PORT=8082
+    restart: unless-stopped
+    networks:
+      - cards-network
+
+networks:
+  cards-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
