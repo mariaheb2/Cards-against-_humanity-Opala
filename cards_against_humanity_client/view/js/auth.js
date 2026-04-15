@@ -4,6 +4,11 @@ window.gameClient = {
     userId: null,
     username: null,
 
+    async hashPassword(password) {
+        const msgBuffer = new TextEncoder().encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    },
     logout() {
         if (this.ws) {
             this.ws.close();
@@ -32,36 +37,36 @@ window.gameClient = {
     },
 
     connect() {
-    // Evita múltiplas conexões
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        return Promise.resolve();
-    }
+        // Evita múltiplas conexões
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            return Promise.resolve();
+        }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
 
-    return new Promise((resolve, reject) => {
-        this.ws = new WebSocket(wsUrl);
+        return new Promise((resolve, reject) => {
+            this.ws = new WebSocket(wsUrl);
 
-        this.ws.onopen = () => {
-            console.log('WebSocket conectado');
-            resolve();
-        };
+            this.ws.onopen = () => {
+                console.log('WebSocket conectado');
+                resolve();
+            };
 
-        this.ws.onerror = (err) => {
-            console.error('WebSocket erro', err);
-            reject(err);
-        };
+            this.ws.onerror = (err) => {
+                console.error('WebSocket erro', err);
+                reject(err);
+            };
 
-        this.ws.onclose = () => {
-            console.log('WebSocket fechado');
-            this.authenticated = false;
-        };
+            this.ws.onclose = () => {
+                console.log('WebSocket fechado');
+                this.authenticated = false;
+            };
 
-        this.ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            this.handleMessage(msg);
-        };
+            this.ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                this.handleMessage(msg);
+            };
         });
     },
 
@@ -74,28 +79,25 @@ window.gameClient = {
     },
 
     handleMessage(msg) {
-         console.log('Mensagem recebida:', msg);
+        console.log('Mensagem recebida:', msg);
 
-        // Tratamento específico para restauração de sessão
         if (msg.type === 'RESTORE_SESSION') {
             console.log('Sessão restaurada com sucesso');
             this.authenticated = true;
-            // Dispara evento específico para quem quiser reagir à restauração
             const sessionEvent = new CustomEvent('sessionRestored', { detail: msg.payload });
             window.dispatchEvent(sessionEvent);
         }
 
-        // Dispara evento genérico para todas as mensagens 
         const event = new CustomEvent('gameMessage', { detail: msg });
         window.dispatchEvent(event);
     },
-
-    // Métodos auxiliares para autenticação
-    register(username, email, password) {
-        this.send('REGISTER', { username, email, password });
+    async register(username, email, password) {
+        const hashedPassword = await this.hashPassword(password);
+        this.send('REGISTER', { username, email, password: hashedPassword });
     },
 
-    login(email, password) {
-        this.send('LOGIN', { email, password });
+    async login(email, password) {
+        const hashedPassword = await this.hashPassword(password);
+        this.send('LOGIN', { email, password: hashedPassword });
     }
 };
