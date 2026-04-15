@@ -203,9 +203,22 @@ public class LobbyService {
             game.setState(GameState.STARTING);
             gameRepository.save(game);
         });
-        // Inicia a primeira rodada fora da transação para evitar longa duração
-        LOGGER.info("Starting first round for game: " + gameId);
-        return gameService.startNewRound(gameId);
+
+        try {
+            // Inicia a primeira rodada fora da transação para evitar longa duração
+            LOGGER.info("Starting first round for game: " + gameId);
+            return gameService.startNewRound(gameId);
+        } catch (Exception e) {
+            LOGGER.severe("Failed to start first round, reverting state. Error: " + e.getMessage());
+            // Reverte o estado para WAITING_PLAYERS se houver falha (ex: sem cartas)
+            transaction.executeVoid(em -> {
+                gameRepository.findById(gameId).ifPresent(game -> {
+                    game.setState(GameState.WAITING_PLAYERS);
+                    gameRepository.save(game);
+                });
+            });
+            throw e;
+        }
     }
 
     /**
