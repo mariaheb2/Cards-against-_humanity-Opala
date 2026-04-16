@@ -68,6 +68,7 @@ public class GameEventHandler {
         eventBus.subscribe(EventType.JOIN_GAME, this::onJoinGame);
         eventBus.subscribe(EventType.START_GAME, this::onStartGame);
         eventBus.subscribe(EventType.PLAY_CARD, this::onPlayCard);
+        eventBus.subscribe(EventType.REVEAL_CARDS, this::onRevealCards);
         eventBus.subscribe(EventType.SELECT_WINNER, this::onSelectWinner);
         LOGGER.info("GameEventHandler registered for all game events.");
     }
@@ -227,6 +228,37 @@ public class GameEventHandler {
 
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "[" + clientId + "] Error in PLAY_CARD", e);
+            sendError(clientId, e.getMessage());
+        }
+    }
+
+    /**
+     * REVEAL_CARDS → O juiz escolheu revelar as cartas.
+     * Re-transmite as cartas para que os outros jogadores possam vê-las.
+     */
+    private void onRevealCards(GameEvent event) {
+        String clientId = event.getSourceClientId();
+        String userId = registry.getUserIdByClientId(clientId);
+        if (!assertAuthenticated(clientId, userId))
+            return;
+
+        try {
+            String gameId = event.getGameId();
+            JsonObject payload = event.getPayload();
+            if (gameId == null && payload != null && payload.has("gameId")) {
+                gameId = payload.get("gameId").getAsString();
+            }
+            if (gameId == null) {
+                sendError(clientId, "gameId is required");
+                return;
+            }
+
+            // Apenas repassamos o CARDS_REVEALED com as cartas que o juiz enviou
+            broadcastToGame(gameId, buildMessage("CARDS_REVEALED", payload));
+            LOGGER.info("[" + clientId + "] Cards revealed in game: " + gameId);
+
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "[" + clientId + "] Error in REVEAL_CARDS", e);
             sendError(clientId, e.getMessage());
         }
     }

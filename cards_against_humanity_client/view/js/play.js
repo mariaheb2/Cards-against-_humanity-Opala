@@ -80,6 +80,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 onRoundResult(msg.payload);
                 break;
 
+            // Respostas reveladas pelo juiz
+            case 'CARDS_REVEALED':
+                onCardsRevealed(msg.payload);
+                break;
+
             // Fim de jogo 
             case 'GAME_FINISHED':
                 onGameFinished(msg.payload);
@@ -150,14 +155,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('play-status').style.display = 'none';
 
             document.getElementById('btn-reveal-cards').addEventListener('click', () => {
-                showJudgeArea(payload.playedCards, payload.gameId);
-            });
+                // Desabilita botão após click
+                document.getElementById('btn-reveal-cards').disabled = true;
+                document.getElementById('btn-reveal-cards').textContent = 'Revelando...';
+                window.gameClient.send('REVEAL_CARDS', { 
+                    gameId: payload.gameId, 
+                    playedCards: payload.playedCards 
+                });
+            }, { once: true });
         } else {
             // Jogadores comuns veem mensagem de espera
             setHandHint('⏳ Aguardando o juiz escolher a melhor resposta...');
             disableHand();
             setStatusLabel('⚖️ Juiz avaliando as respostas...');
         }
+    }
+
+    function onCardsRevealed(payload) {
+        showJudgeArea(payload.playedCards, payload.gameId);
     }
 
     function onRoundResult(payload) {
@@ -250,7 +265,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const grid = document.getElementById('played-cards-grid');
         const label = document.getElementById('judge-area-label');
 
-        label.textContent = '⚖️ Selecione a melhor resposta';
+        if (isJudge) {
+            label.textContent = '⚖️ Selecione a melhor resposta';
+        } else {
+            label.textContent = '👀 Respostas reveladas! O juiz está selecionando a melhor...';
+        }
+        
         grid.innerHTML = '';
 
         playedCards.forEach((pc, idx) => {
@@ -318,8 +338,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Mostrar a carta escolhida
         const winningCardArea = document.getElementById('round-winning-card');
         if (winningCardArea) {
+            winningCardArea.style.display = 'block';
             winningCardArea.innerHTML = `
-                <div class="white-card">
+                <div class="white-card" style="margin: 0 auto; color: #111; pointer-events: none;">
                     <div class="white-card-text">${payload.winningCardText || '...'}</div>
                     <div class="white-card-footer">
                         <span>Cards Against Humanity</span>

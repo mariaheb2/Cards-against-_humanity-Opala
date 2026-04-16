@@ -253,6 +253,7 @@ public class ClientHandler implements Runnable {
             case JOIN_GAME      -> EventType.JOIN_GAME;
             case START_GAME     -> EventType.START_GAME;
             case PLAY_CARD      -> EventType.PLAY_CARD;
+            case REVEAL_CARDS   -> EventType.REVEAL_CARDS;
             case SELECT_WINNER  -> EventType.SELECT_WINNER;
             default             -> null;
         };

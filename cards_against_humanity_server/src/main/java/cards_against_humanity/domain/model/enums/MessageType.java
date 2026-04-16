@@ -38,6 +38,8 @@ public enum MessageType {
     PLAYER_PLAYED,
 
     JUDGE_SELECTING,
+    REVEAL_CARDS,
+    CARDS_REVEALED,
 
     SELECT_WINNER,
     ROUND_RESULT,

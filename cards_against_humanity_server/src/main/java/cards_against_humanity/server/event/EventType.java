@@ -8,6 +8,7 @@ public enum EventType {
     JOIN_GAME,
     START_GAME,
     PLAY_CARD,
+    REVEAL_CARDS,
     SELECT_WINNER,
     CREATE_CARD,
     LIST_OPEN_ROOMS,
