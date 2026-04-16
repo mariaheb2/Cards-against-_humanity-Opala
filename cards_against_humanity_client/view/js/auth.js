@@ -67,8 +67,7 @@ window.gameClient = {
 
     send(type, payload) {
         const message = JSON.stringify({ type, payload });
-        console.log('Enviando mensagem:', message);
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(message);
         }
     },
