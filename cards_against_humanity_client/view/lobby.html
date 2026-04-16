@@ -1,51 +1,127 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lobby - Cards Against Humanity</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <div class="lobby-container">
         <div class="lobby-header">
-            <h2> Salão de Jogos</h2>
+            <h2>Salão de Jogos</h2>
             <div class="user-info">
+                <span class="online-dot"></span>
                 <span id="lobby-username"></span>
             </div>
         </div>
 
         <div class="lobby-content">
-            <div class="online-users">
-                <h3>Players Online</h3>
-                <ul id="online-list" class="online-list"></ul>
+
+            <!-- Coluna esquerda -->
+            <div class="lobby-left-col">
+
+                <!-- Jogadores online -->
+                <div class="lobby-panel">
+                    <h3>Players Online</h3>
+                    <ul id="online-list" class="online-list"></ul>
+                </div>
+
+                <!-- Salas abertas -->
+                <div class="lobby-panel rooms-panel">
+                    <div class="panel-title-row">
+                        <h3>Salas Abertas</h3>
+                        <button id="refresh-rooms-btn" class="btn-icon" title="Atualizar salas">↻</button>
+                    </div>
+                    <div id="rooms-list" class="rooms-list">
+                        <p class="rooms-empty">Nenhuma sala disponível no momento.</p>
+                    </div>
+                </div>
+
             </div>
-            <div class="create-game-panel">
-                <h3>Criar Partida</h3>
-                <div class="input-group">
-                    <label>Máximo de jogadores</label>
-                    <input type="number" id="max-players" min="2" max="8" value="6">
+
+            <!-- Coluna direita -->
+            <div class="lobby-right-col">
+
+                <!-- Criar Partida -->
+                <div class="lobby-panel">
+                    <h3>Criar Partida</h3>
+                    <div class="input-group">
+                        <label for="max-players">Máximo de jogadores</label>
+                        <input type="number" id="max-players" min="2" max="8" value="6">
+                    </div>
+                    <div class="input-group">
+                        <label for="target-score">Pontuação alvo</label>
+                        <input type="number" id="target-score" min="3" max="15" value="8">
+                    </div>
+                    <button id="create-game-btn" class="btn-primary">Criar Sala</button>
                 </div>
-                <div class="input-group">
-                    <label>Pontuação alvo</label>
-                    <input type="number" id="target-score" min="3" max="15" value="8">
+
+                <!-- Entrar por código -->
+                <div class="lobby-panel">
+                    <h3>Entrar por Código</h3>
+                    <div id="game-code-display" class="game-code" style="display:none;"></div>
+                    <div class="input-group">
+                        <label for="join-code">Código da sala</label>
+                        <input type="text" id="join-code" placeholder="Cole o código aqui...">
+                        <button id="join-game-btn" class="btn-secondary">Entrar</button>
+                    </div>
                 </div>
-                <button id="create-game-btn" class="btn-primary">Criar Sala</button>
-            </div>
-            <div class="game-code-panel">
-                <h3>Sala Atual</h3>
-                <div id="game-code-display" class="game-code">Nenhuma sala</div>
-                <div class="input-group">
-                    <label>Entrar em sala pelo código</label>
-                    <input type="text" id="join-code" placeholder="Código da sala">
-                    <button id="join-game-btn" class="btn-secondary">Entrar</button>
+
+                <!-- Criar Carta Customizada -->
+                <div class="lobby-panel card-creator-panel">
+                    <h3>Criar Carta</h3>
+                    <p class="panel-desc">Adicione suas próprias cartas ao deck do jogo!</p>
+                    <div class="input-group">
+                        <label for="card-text">Texto da carta</label>
+                        <textarea id="card-text" rows="3" maxlength="300"
+                            placeholder="Digite o texto da sua carta..."></textarea>
+                        <span id="card-char-count" class="char-count">0/300</span>
+                    </div>
+                    <div class="input-group card-type-group">
+                        <label>Tipo de carta</label>
+                        <div class="card-type-toggle">
+                            <button id="card-type-question" class="type-btn type-btn-question active"
+                                data-type="QUESTION">
+                                ⬛ Pergunta
+                            </button>
+                            <button id="card-type-answer" class="type-btn type-btn-answer" data-type="ANSWER">
+                                ⬜ Resposta
+                            </button>
+                        </div>
+                    </div>
+                    <button id="create-card-btn" class="btn-create-card">Criar Carta</button>
+                    <div id="card-feedback" class="card-feedback" style="display:none;"></div>
                 </div>
+
             </div>
         </div>
     </div>
+
+    <!-- Modal: pop-up de aprovação de entrada (visível apenas para o dono da sala) -->
+    <div id="join-request-modal" class="modal-overlay" style="display:none;" aria-modal="true" role="dialog">
+        <div class="modal-box">
+            <div class="modal-icon">🚪</div>
+            <h2 class="modal-title">Pedido de Entrada</h2>
+            <p class="modal-desc">
+                <strong id="requester-name"></strong> quer entrar na sua sala.
+            </p>
+            <div class="modal-actions">
+                <button id="approve-join-btn" class="btn-approve">✅ Aceitar</button>
+                <button id="reject-join-btn" class="btn-reject">❌ Recusar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast de notificação -->
+    <div id="toast" class="toast" style="display:none;"></div>
 
     <script src="js/auth.js"></script>
     <script src="js/global.js"></script>
     <script src="js/lobby.js"></script>
     <script src="js/menu.js"></script>
 </body>
+
 </html>

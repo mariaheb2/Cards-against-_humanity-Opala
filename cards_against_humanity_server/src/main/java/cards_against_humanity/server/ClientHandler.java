@@ -14,17 +14,19 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import cards_against_humanity.domain.model.enums.MessageType;
-import cards_against_humanity.application.service.AuthService;
-import cards_against_humanity.application.service.LobbyService;
+import cards_against_humanity.domain.model.Card;
 import cards_against_humanity.domain.model.Game;
 import cards_against_humanity.domain.model.Player;
 import cards_against_humanity.domain.model.User;
+import cards_against_humanity.domain.model.enums.CardType;
+import cards_against_humanity.domain.model.enums.MessageType;
+import cards_against_humanity.application.service.AuthService;
+import cards_against_humanity.application.service.LobbyService;
 import cards_against_humanity.network.dto.LoginRequest;
 import cards_against_humanity.network.dto.RegisterRequest;
 import cards_against_humanity.server.event.EventBus;
 import cards_against_humanity.server.event.EventType;
-import cards_against_humanity.server.event.GameEvent;;
+import cards_against_humanity.server.event.GameEvent;
 
 public class ClientHandler implements Runnable {
 
@@ -32,6 +34,7 @@ public class ClientHandler implements Runnable {
     private String authenticatedUserId;
     private final LobbyService lobbyService;
     private String currentGameCode;
+    private final PendingJoinRegistry pendingJoinRegistry;
 
     /** EventBus compartilhado por todos os handlers; pode ser {@code null} se não injetado. */
     private final EventBus eventBus;
@@ -50,7 +53,8 @@ public class ClientHandler implements Runnable {
 
     /** Construtor completo – usado pelo {@link ClientHandlerFactory}. */
     public ClientHandler(Socket socket, ClientRegistry registry, String charset,
-                         AuthService authService, EventBus eventBus, LobbyService lobbyService) {
+                         AuthService authService, EventBus eventBus, LobbyService lobbyService,
+                         PendingJoinRegistry pendingJoinRegistry) {
         this.clientId = UUID.randomUUID().toString();
         this.socket = socket;
         this.registry = registry;
@@ -59,16 +63,23 @@ public class ClientHandler implements Runnable {
         this.eventBus = eventBus;
         this.authenticatedUserId = null;
         this.lobbyService = lobbyService;
+        this.pendingJoinRegistry = pendingJoinRegistry;
+    }
+
+    /** Construtor legado sem PendingJoinRegistry (compatibilidade retroativa). */
+    public ClientHandler(Socket socket, ClientRegistry registry, String charset,
+                         AuthService authService, EventBus eventBus, LobbyService lobbyService) {
+        this(socket, registry, charset, authService, eventBus, lobbyService, new PendingJoinRegistry());
     }
 
     /** Construtor legado sem EventBus (compatibilidade retroativa). */
     public ClientHandler(Socket socket, ClientRegistry registry, String charset, AuthService authService, LobbyService lobbyService) {
-        this(socket, registry, charset, authService, null, lobbyService);
+        this(socket, registry, charset, authService, null, lobbyService, new PendingJoinRegistry());
     }
 
     /** Construtor mínimo sem AuthService nem EventBus. */
     public ClientHandler(Socket socket, ClientRegistry registry, String charset) {
-        this(socket, registry, charset, null, null, null);
+        this(socket, registry, charset, null, null, null, new PendingJoinRegistry());
     }
 
     @Override
@@ -85,6 +96,9 @@ public class ClientHandler implements Runnable {
             LOGGER.log(Level.WARNING, "[" + clientId + "] I/O error: " + e.getMessage(), e);
         } finally {
             publishLifecycle(EventType.CLIENT_DISCONNECTED, null);
+            if (pendingJoinRegistry != null) {
+                pendingJoinRegistry.removeByClientId(clientId);
+            }
             cleanup();
         }
     }
@@ -128,7 +142,6 @@ public class ClientHandler implements Runnable {
     protected void handleMessage(String rawMessage) {
         LOGGER.fine("[" + clientId + "] Received: " + rawMessage);
         try {
-            // Parse simples para obter o tipo (pode usar Jackson depois)
             JsonObject json = JsonParser.parseString(rawMessage).getAsJsonObject();
             String typeStr = json.get("type").getAsString();
             MessageType type = MessageType.valueOf(typeStr);
@@ -158,6 +171,21 @@ public class ClientHandler implements Runnable {
                     break;
                 case LEAVE_GAME:
                     handleLeaveGame(payload);
+                    break;
+                case CREATE_CARD:
+                    handleCreateCard(payload);
+                    break;
+                case LIST_OPEN_ROOMS:
+                    handleListOpenRooms();
+                    break;
+                case REQUEST_JOIN:
+                    handleRequestJoin(payload);
+                    break;
+                case APPROVE_JOIN:
+                    handleApproveJoin(payload);
+                    break;
+                case REJECT_JOIN:
+                    handleRejectJoin(payload);
                     break;
                 case START_GAME:
                     if (authenticatedUserId == null) {
@@ -364,8 +392,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    
-
     private void handleGetGameInfo(JsonObject payload) {
         // Aceita tanto 'gameCode' quanto 'gameId'
         String gameCode = payload.has("gameCode")
@@ -409,6 +435,209 @@ public class ClientHandler implements Runnable {
 
     // handleStartGame removido para delegar o START_GAME ao GameEventHandler,
     // garantindo que os usuários recebam NEW_ROUND apropriadamente.
+
+    // ─── Criação de cartas customizadas ────────────────────────────────────────
+
+    /**
+     * Trata CREATE_CARD: cria uma carta customizada (QUESTION ou ANSWER) no banco.
+     *
+     * Payload esperado: { text: string, cardType: "QUESTION" | "ANSWER" }
+     */
+    private void handleCreateCard(JsonObject payload) {
+        if (authenticatedUserId == null) {
+            sendError("Not authenticated. Please login first.");
+            return;
+        }
+        try {
+            String text = payload.get("text").getAsString();
+            String cardTypeStr = payload.has("cardType") ? payload.get("cardType").getAsString() : "ANSWER";
+            CardType cardType = CardType.valueOf(cardTypeStr.toUpperCase());
+            Card card = lobbyService.createCard(authenticatedUserId, text, cardType);
+
+            JsonObject resp = new JsonObject();
+            resp.addProperty("cardId", card.getId());
+            resp.addProperty("text", card.getText());
+            resp.addProperty("cardType", card.getType().name());
+            send(MessageType.CARD_CREATED, resp);
+            LOGGER.info("[" + clientId + "] Card created: [" + cardType + "] " + text);
+        } catch (Exception e) {
+            sendError("Erro ao criar carta: " + e.getMessage());
+        }
+    }
+
+    // ─── Listagem de salas abertas ──────────────────────────────────────────────
+
+    /**
+     * Trata LIST_OPEN_ROOMS: retorna todas as salas no estado WAITING_PLAYERS.
+     */
+    private void handleListOpenRooms() {
+        try {
+            java.util.List<Game> games = lobbyService.listActiveGames();
+            JsonArray roomsArray = new JsonArray();
+            for (Game g : games) {
+                java.util.List<Player> players = lobbyService.getPlayersInGame(g.getId());
+                JsonObject roomObj = new JsonObject();
+                roomObj.addProperty("gameId", g.getId());
+                roomObj.addProperty("playerCount", players.size());
+                roomObj.addProperty("maxPlayers", g.getMaxPlayers());
+                roomObj.addProperty("targetScore", g.getTargetScore());
+                // Incluir nome do criador da sala, se disponível
+                String ownerName = registry.getUsernameByUserId(g.getOwnerId());
+                roomObj.addProperty("ownerName", ownerName != null ? ownerName : "Desconhecido");
+                roomsArray.add(roomObj);
+            }
+            JsonObject resp = new JsonObject();
+            resp.add("rooms", roomsArray);
+            send(MessageType.OPEN_ROOMS, resp);
+        } catch (Exception e) {
+            sendError("Erro ao listar salas: " + e.getMessage());
+        }
+    }
+
+    // ─── Fluxo de aprovação de entrada em sala ─────────────────────────────────
+
+    /**
+     * Trata REQUEST_JOIN: o jogador solicitante pede para entrar via lista de salas.
+     * Envia um pop-up (JOIN_REQUEST) para o dono da sala com um requestId.
+     *
+     * Payload esperado: { gameId: string }
+     */
+    private void handleRequestJoin(JsonObject payload) {
+        if (authenticatedUserId == null) {
+            sendError("Not authenticated. Please login first.");
+            return;
+        }
+        try {
+            String gameId = payload.get("gameId").getAsString();
+            Game game = lobbyService.getGameById(gameId);
+            if (game == null) {
+                sendError("Sala não encontrada");
+                return;
+            }
+
+            // Registra o pedido pendente
+            String requestId = pendingJoinRegistry.register(clientId, authenticatedUserId, gameId);
+
+            // Encontra o clientId do dono da sala
+            String ownerClientId = registry.getClientIdByUserId(game.getOwnerId());
+            if (ownerClientId == null) {
+                sendError("O criador da sala não está online. Tente entrar pelo código.");
+                pendingJoinRegistry.resolve(requestId); // limpa o registro
+                return;
+            }
+
+            // Obtém nome do solicitante
+            String requesterName = registry.getUsernameByUserId(authenticatedUserId);
+            if (requesterName == null) requesterName = "Jogador";
+
+            // Envia pop-up para o dono da sala
+            JsonObject joinRequestPayload = new JsonObject();
+            joinRequestPayload.addProperty("requestId", requestId);
+            joinRequestPayload.addProperty("requesterUserId", authenticatedUserId);
+            joinRequestPayload.addProperty("requesterName", requesterName);
+            joinRequestPayload.addProperty("gameId", gameId);
+
+            JsonObject joinRequestMsg = new JsonObject();
+            joinRequestMsg.addProperty("type", MessageType.JOIN_REQUEST.name());
+            joinRequestMsg.add("payload", joinRequestPayload);
+            registry.sendTo(ownerClientId, joinRequestMsg.toString());
+
+            LOGGER.info("[" + clientId + "] JOIN request sent to owner " + ownerClientId
+                    + " for game " + gameId + " (requestId=" + requestId + ")");
+        } catch (Exception e) {
+            sendError("Erro ao solicitar entrada: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Trata APPROVE_JOIN: o dono da sala aprova a entrada do solicitante.
+     * Chama joinGame e faz broadcast de PLAYER_JOINED.
+     *
+     * Payload esperado: { requestId: string }
+     */
+    private void handleApproveJoin(JsonObject payload) {
+        if (authenticatedUserId == null) {
+            sendError("Not authenticated.");
+            return;
+        }
+        try {
+            String requestId = payload.get("requestId").getAsString();
+            PendingJoinRegistry.PendingRequest req = pendingJoinRegistry.resolve(requestId);
+            if (req == null) {
+                sendError("Requisição não encontrada ou já expirada.");
+                return;
+            }
+
+            // Verifica que quem está aprovando é realmente o dono da sala
+            Game game = lobbyService.getGameById(req.gameId());
+            if (game == null) {
+                sendError("Sala não encontrada.");
+                return;
+            }
+            if (!game.getOwnerId().equals(authenticatedUserId)) {
+                sendError("Apenas o criador pode aprovar entradas.");
+                return;
+            }
+
+            // Processa a entrada do jogador
+            Player player = lobbyService.joinGame(req.requesterUserId(), req.gameId());
+
+            // Notifica o solicitante que foi aceito (inclui gameId para redirecionar)
+            JsonObject acceptedPayload = new JsonObject();
+            acceptedPayload.addProperty("gameId", req.gameId());
+            acceptedPayload.addProperty("gameCode", req.gameId());
+            JsonObject acceptedMsg = new JsonObject();
+            acceptedMsg.addProperty("type", MessageType.JOIN_ACCEPTED.name());
+            acceptedMsg.add("payload", acceptedPayload);
+            registry.sendTo(req.requesterClientId(), acceptedMsg.toString());
+
+            // Broadcast PLAYER_JOINED para todos na sala
+            JsonObject joinedPayload = new JsonObject();
+            joinedPayload.addProperty("gameId", req.gameId());
+            joinedPayload.addProperty("playerId", player.getId());
+            joinedPayload.addProperty("username", player.getUser().getUsername());
+            broadcastToGame(req.gameId(), MessageType.PLAYER_JOINED, joinedPayload);
+
+            LOGGER.info("[" + clientId + "] Approved join for user " + req.requesterUserId()
+                    + " in game " + req.gameId());
+        } catch (Exception e) {
+            sendError("Erro ao aprovar entrada: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Trata REJECT_JOIN: o dono da sala rejeita a entrada do solicitante.
+     *
+     * Payload esperado: { requestId: string }
+     */
+    private void handleRejectJoin(JsonObject payload) {
+        if (authenticatedUserId == null) {
+            sendError("Not authenticated.");
+            return;
+        }
+        try {
+            String requestId = payload.get("requestId").getAsString();
+            PendingJoinRegistry.PendingRequest req = pendingJoinRegistry.resolve(requestId);
+            if (req == null) {
+                sendError("Requisição não encontrada ou já expirada.");
+                return;
+            }
+
+            // Notifica o solicitante que foi rejeitado
+            JsonObject rejectedPayload = new JsonObject();
+            rejectedPayload.addProperty("gameId", req.gameId());
+            rejectedPayload.addProperty("message", "O criador da sala recusou sua entrada.");
+            JsonObject rejectedMsg = new JsonObject();
+            rejectedMsg.addProperty("type", MessageType.JOIN_REJECTED.name());
+            rejectedMsg.add("payload", rejectedPayload);
+            registry.sendTo(req.requesterClientId(), rejectedMsg.toString());
+
+            LOGGER.info("[" + clientId + "] Rejected join for user " + req.requesterUserId()
+                    + " in game " + req.gameId());
+        } catch (Exception e) {
+            sendError("Erro ao rejeitar entrada: " + e.getMessage());
+        }
+    }
 
     /**
      * Envia uma mensagem para todos os jogadores de uma sala.

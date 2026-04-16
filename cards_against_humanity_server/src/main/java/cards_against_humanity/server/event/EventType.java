@@ -9,6 +9,11 @@ public enum EventType {
     START_GAME,
     PLAY_CARD,
     SELECT_WINNER,
+    CREATE_CARD,
+    LIST_OPEN_ROOMS,
+    REQUEST_JOIN,
+    APPROVE_JOIN,
+    REJECT_JOIN,
 
     // ── Eventos de resposta publicados pelos handlers de serviço ───────────
     GAME_CREATED,

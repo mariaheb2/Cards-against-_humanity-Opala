@@ -55,6 +55,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const playersList = {}; // playerId → username
     let pollInterval = null;
 
+    // Elementos do Modal de Solicitação
+    const joinRequestModal = document.getElementById('join-request-modal');
+    const requesterNameEl = document.getElementById('requester-name');
+    let pendingRequestId = null;
+    const toast = document.getElementById('toast');
+
     // Escutar mensagens do servidor 
     window.addEventListener('gameMessage', (e) => {
         const msg = e.detail;
@@ -114,6 +120,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 sessionStorage.setItem('initialRoundData', JSON.stringify(msg.payload));
                 break;
 
+            case 'JOIN_REQUEST':
+                if (isOwner && joinRequestModal) {
+                    pendingRequestId = msg.payload.requestId;
+                    requesterNameEl.textContent = msg.payload.requesterName;
+                    joinRequestModal.style.display = 'flex';
+                }
+                break;
+
             case 'ERROR':
                 console.error('[game.js] Erro server:', msg.payload.message);
                 // Mostra como alert apenas erros criticos de sala
@@ -166,6 +180,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.gameClient.send('LEAVE_GAME', { gameCode, gameId: gameCode });
         window.location.href = '/lobby.html';
     });
+
+    // Botões do Modal de Aprovação 
+    const approveBtn = document.getElementById('approve-join-btn');
+    const rejectBtn = document.getElementById('reject-join-btn');
+
+    if (approveBtn && rejectBtn) {
+        approveBtn.addEventListener('click', () => {
+            if (!pendingRequestId) return;
+            window.gameClient.send('APPROVE_JOIN', { requestId: pendingRequestId });
+            hideModal();
+            requestGameInfo(); // Solicita atualização da lista após aceitar
+        });
+
+        rejectBtn.addEventListener('click', () => {
+            if (!pendingRequestId) return;
+            window.gameClient.send('REJECT_JOIN', { requestId: pendingRequestId });
+            hideModal();
+        });
+    }
+
+    function hideModal() {
+        if (joinRequestModal) {
+            joinRequestModal.style.display = 'none';
+        }
+        pendingRequestId = null;
+    }
 
     // Helpers 
 
@@ -226,7 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 startBtn.style.opacity = '1';
                 startBtn.style.cursor = 'pointer';
             } else {
-                waitingMsg.innerHTML = '✅ Aguardando o criador iniciar a partida...';
+                waitingMsg.innerHTML = 'Aguardando o criador iniciar a partida...';
                 waitingMsg.className = 'waiting-message ready';
                 startBtn.disabled = true;
                 startBtn.style.opacity = '0.5';
@@ -245,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function showStartingAnimation(callback) {
         const card = document.getElementById('waiting-card');
         const msg = document.getElementById('waiting-message');
-        msg.innerHTML = '🚀 Iniciando partida...';
+        msg.innerHTML = 'Iniciando partida...';
         msg.className = 'waiting-message ready';
         card.style.transform = 'scale(1.03)';
         card.style.boxShadow = '0 0 60px rgba(231,76,60,0.7)';

@@ -68,9 +68,14 @@ public class TcpServer {
         // Instancia serviços de domínio
         GameService gameService = new GameService(gameRepository, playerRepository, cardRepository,
                 playedCardRepository);
-        LobbyService lobbyService = new LobbyService(gameRepository, playerRepository, userRepository, gameService);
-        
-        this.handlerFactory = new ClientHandlerFactory(registry, config, authService, eventBus, lobbyService);
+        LobbyService lobbyService = new LobbyService(gameRepository, playerRepository, userRepository,
+                cardRepository, gameService);
+
+        // Registro compartilhado de pedidos de entrada pendentes (aprovação pelo dono da sala)
+        PendingJoinRegistry pendingJoinRegistry = new PendingJoinRegistry();
+
+        this.handlerFactory = new ClientHandlerFactory(registry, config, authService, eventBus, lobbyService,
+                pendingJoinRegistry);
 
         // Registra o handler de eventos de jogo no EventBus
         GameEventHandler gameEventHandler = new GameEventHandler(

@@ -22,7 +22,7 @@ public enum MessageType {
 
     GAME_CODE,
 
-    GET_GAME_INFO,  
+    GET_GAME_INFO,
     LEAVE_GAME,
 
     JOIN_GAME,
@@ -47,6 +47,22 @@ public enum MessageType {
     GAME_FINISHED,
 
     END_GAME,
+
+    // ── Criação de cartas customizadas ─────────────────────────────────────
+    CREATE_CARD,
+    CARD_CREATED,
+
+    // ── Salas abertas ──────────────────────────────────────────────────────
+    LIST_OPEN_ROOMS,
+    OPEN_ROOMS,
+
+    // ── Fluxo de aprovação de entrada em sala ─────────────────────────────
+    REQUEST_JOIN,
+    JOIN_REQUEST,
+    APPROVE_JOIN,
+    REJECT_JOIN,
+    JOIN_ACCEPTED,
+    JOIN_REJECTED,
 
     ERROR
 }

@@ -4,7 +4,9 @@ import cards_against_humanity.domain.model.Card;
 import cards_against_humanity.domain.model.Game;
 import cards_against_humanity.domain.model.Player;
 import cards_against_humanity.domain.model.User;
+import cards_against_humanity.domain.model.enums.CardType;
 import cards_against_humanity.domain.model.enums.GameState;
+import cards_against_humanity.domain.repository.CardRepository;
 import cards_against_humanity.domain.repository.GameRepository;
 import cards_against_humanity.domain.repository.PlayerRepository;
 import cards_against_humanity.domain.repository.UserRepository;
@@ -36,6 +38,7 @@ public class LobbyService {
     private final GameRepository gameRepository;
     private final PlayerRepository playerRepository;
     private final UserRepository userRepository;
+    private final CardRepository cardRepository;
     private final GameService gameService;
     private final Transaction transaction;
 
@@ -45,19 +48,23 @@ public class LobbyService {
      * @param gameRepository   repositório de partidas
      * @param playerRepository repositório de jogadores
      * @param userRepository   repositório de usuários
+     * @param cardRepository   repositório de cartas
      * @param gameService      serviço de orquestração do jogo (para iniciar
      *                         rodadas)
      */
     public LobbyService(GameRepository gameRepository,
             PlayerRepository playerRepository,
             UserRepository userRepository,
+            CardRepository cardRepository,
             GameService gameService) {
         this.gameRepository = gameRepository;
         this.playerRepository = playerRepository;
         this.userRepository = userRepository;
+        this.cardRepository = cardRepository;
         this.gameService = gameService;
         this.transaction = new Transaction();
     }
+
 
     /**
      * Cria uma nova partida com as configurações especificadas.
@@ -255,4 +262,25 @@ public class LobbyService {
             }
         });
     }
-}
+
+    /**
+     * Cria uma nova carta customizada (QUESTION ou ANSWER) e a persiste no banco.
+     *
+     * @param userId ID do usuário autenticado que está criando a carta
+     * @param text   texto da carta
+     * @param type   tipo da carta ({@link CardType#QUESTION} ou {@link CardType#ANSWER})
+     * @return a carta recém-criada e persistida
+     * @throws IllegalArgumentException se o texto for vazio ou nulo
+     */
+    public Card createCard(String userId, String text, CardType type) {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("O texto da carta não pode ser vazio");
+        }
+        return transaction.execute(em -> {
+            Card card = new Card(text.trim(), type);
+            em.persist(card);
+            LOGGER.info("Card created by user " + userId + ": [" + type + "] " + text.trim());
+            return card;
+        });
+    }
+}

@@ -9,8 +9,8 @@ import cards_against_humanity.server.event.EventBus;
  * Fábrica de {@link ClientHandler}.
  *
  * <p>Centraliza a criação de handlers garantindo que todos compartilhem
- * o mesmo {@link ClientRegistry}, charset, {@link AuthService} e
- * {@link EventBus}.
+ * o mesmo {@link ClientRegistry}, charset, {@link AuthService},
+ * {@link EventBus} e {@link PendingJoinRegistry}.
  */
 public class ClientHandlerFactory {
 
@@ -19,22 +19,35 @@ public class ClientHandlerFactory {
     private final AuthService authService;
     private final EventBus eventBus;
     private final LobbyService lobbyService;
+    private final PendingJoinRegistry pendingJoinRegistry;
 
     /**
-     * Construtor completo com EventBus.
+     * Construtor completo com EventBus e PendingJoinRegistry.
      *
-     * @param registry    registro global de clientes conectados
-     * @param config      configuração do servidor (fornece charset)
-     * @param authService serviço de autenticação
-     * @param eventBus    barramento de eventos compartilhado
+     * @param registry            registro global de clientes conectados
+     * @param config              configuração do servidor (fornece charset)
+     * @param authService         serviço de autenticação
+     * @param eventBus            barramento de eventos compartilhado
+     * @param lobbyService        serviço de lobby
+     * @param pendingJoinRegistry registro de pedidos de entrada pendentes
      */
     public ClientHandlerFactory(ClientRegistry registry, ServerConfig config,
-                                AuthService authService, EventBus eventBus, LobbyService lobbyService) {
+                                AuthService authService, EventBus eventBus, LobbyService lobbyService,
+                                PendingJoinRegistry pendingJoinRegistry) {
         this.registry = registry;
         this.charset = config.getCharset();
         this.authService = authService;
         this.eventBus = eventBus;
         this.lobbyService = lobbyService;
+        this.pendingJoinRegistry = pendingJoinRegistry;
+    }
+
+    /**
+     * Construtor sem PendingJoinRegistry (cria instância isolada por handler para compatibilidade).
+     */
+    public ClientHandlerFactory(ClientRegistry registry, ServerConfig config,
+                                AuthService authService, EventBus eventBus, LobbyService lobbyService) {
+        this(registry, config, authService, eventBus, lobbyService, new PendingJoinRegistry());
     }
 
     /**
@@ -43,7 +56,7 @@ public class ClientHandlerFactory {
      */
     public ClientHandlerFactory(ClientRegistry registry, ServerConfig config,
                                 AuthService authService, LobbyService lobbyService) {
-        this(registry, config, authService, null, lobbyService);
+        this(registry, config, authService, null, lobbyService, new PendingJoinRegistry());
     }
 
     /**
@@ -55,6 +68,7 @@ public class ClientHandlerFactory {
         this.authService = authService;
         this.eventBus = null;
         this.lobbyService = lobbyService;
+        this.pendingJoinRegistry = new PendingJoinRegistry();
     }
 
     /**
@@ -64,6 +78,6 @@ public class ClientHandlerFactory {
      * @return handler pronto para ser submetido a um {@link java.util.concurrent.ExecutorService}
      */
     public ClientHandler create(Socket socket) {
-        return new ClientHandler(socket, registry, charset, authService, eventBus, lobbyService);
+        return new ClientHandler(socket, registry, charset, authService, eventBus, lobbyService, pendingJoinRegistry);
     }
 }
