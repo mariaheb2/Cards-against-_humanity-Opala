@@ -1,3 +1,7 @@
+/**
+ * Hook universal engatilhado com a DOM de qualquer view. 
+ * Garante que a malha de conexão se estabeleça para despachar Handlers sem delay visual.
+ */
 document.addEventListener('DOMContentLoaded', async () => {
 
     // Se auth.js não estiver carregado ainda, sai

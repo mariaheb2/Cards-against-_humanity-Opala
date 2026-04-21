@@ -42,17 +42,30 @@ public class TcpServer {
     private Thread acceptThread;
     private volatile boolean running = false;
 
-    // Creates a server with default configuration
+    /**
+     * Cria uma instância do servidor TCP com as configurações padrão.
+     */
     public TcpServer() {
         this(new ServerConfig());
     }
 
-    // Construtor que recebe apenas ServerConfig (cria serviços padrão)
+    /**
+     * Construtor que recebe apenas ServerConfig (cria serviços padrão).
+     *
+     * @param config Configurações personalizadas do servidor (porta, threads, etc).
+     */
     public TcpServer(ServerConfig config) {
         this(config, createDefaultAuthService());
     }
 
-    // Construtor completo com injeção de dependência
+    /**
+     * Construtor completo com injeção de dependência.
+     * Inicializa os repositórios JPA, serviços de domínio e configura
+     * os observadores de eventos de jogo (EventBus etc).
+     *
+     * @param config Configurações de rede e threads.
+     * @param authService Serviço responsável por autenticação de usuários.
+     */
     public TcpServer(ServerConfig config, AuthService authService) {
         this.config = config;
         this.registry = new ClientRegistry();
@@ -84,14 +97,25 @@ public class TcpServer {
         gameEventHandler.register();
     }
 
+    /**
+     * Fabrica um serviço de autenticação padrão instanciando repositórios
+     * e codificadores embutidos, caso não sejam fornecidos via injeção.
+     *
+     * @return Uma instância válida de {@link AuthService}.
+     */
     private static AuthService createDefaultAuthService() {
         UserRepository userRepository = new JpaUserRepository();
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
         return new AuthService(userRepository, passwordEncoder);
     }
 
-    // Binds the server socket and starts the accept Loop in a daemon thread - the
-    // server runs in background threads
+    /**
+     * Vincula o socket à porta e inicia o loop de aceitação em uma nova thread
+     * classificada como deamon, deixando o servidor agir de forma não-bloqueante
+     * enquanto atende aos pedidos concorrentes em threads auxiliares.
+     *
+     * @throws IOException Caso haja falha na abertura de portas de rede.
+     */
     public void start() throws IOException {
         serverSocket = new ServerSocket(config.getPort(), config.getBacklog());
         executor = Executors.newFixedThreadPool(config.getThreadPoolSize());
@@ -106,6 +130,10 @@ public class TcpServer {
 
     }
 
+    /**
+     * Cessa com o recebimento de novas conexões e tenta encerrar todas
+     * as tarefas existentes em curso no pool do executor (Graceful shutdown).
+     */
     public void stop() {
         if (!running) {
             return;
@@ -138,6 +166,11 @@ public class TcpServer {
         LOGGER.info("TCP server stopped");
     }
 
+    /**
+     * O loop principal do servidor TCP executado em background. Ele aguarda a chegada
+     * de clientes. Se houver vagas (Connections Limit), despacha aquele socket 
+     * para o Handler e Executor. Caso contrário, ele os rejeita.
+     */
     public void acceptLoop() {
         LOGGER.info("Accept loop started - waiting for connections");
         while (running) {
@@ -167,8 +200,12 @@ public class TcpServer {
         LOGGER.info("Accept loop terminated");
     }
 
-    // Sends a rejection message and closes a socket when the connection limit is
-    // reached
+    /**
+     * Rejeita as conexões que entram caso o servidor tenha estourado o 
+     * limite máximo de jogadores suportados configurado no config.
+     *
+     * @param clientSocket O socket da conexão prestes a ser derrubada.
+     */
     private void rejectConnection(Socket clientSocket) {
         try {
             clientSocket.getOutputStream().write(
@@ -179,6 +216,11 @@ public class TcpServer {
         }
     }
 
+    /**
+     * Informa se o servidor está ou não em execução no momento atual.
+     *
+     * @return true se ativo, do contrário false.
+     */
     public boolean isRunning() {
         return running;
     }
@@ -200,7 +242,11 @@ public class TcpServer {
         return registry.getConnectionCount();
     }
 
-    // Returns the actual TCP port the server is listening on
+    /**
+     * Retorna a porta de rede TCP em que o servidor está ativamente escutando.
+     *
+     * @return Número da porta ou -1 caso o socket esteja fechado.
+     */
     public int getActualPort() {
         if (serverSocket == null || serverSocket.isClosed()) {
             return -1;

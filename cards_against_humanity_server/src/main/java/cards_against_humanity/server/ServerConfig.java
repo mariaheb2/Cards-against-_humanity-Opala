@@ -28,7 +28,10 @@ public final class ServerConfig{
     private final int backlog;
     private final String charset;
 
-    // Loads configuration
+    /**
+     * Carrega as configurações do servidor lendo os parâmetros diretamente 
+     * do arquivo físico padrão de propriedades (config.properties).
+     */
     public ServerConfig(){
         Properties props = loadProperties();
         this.port = parseInt(props, "server.port", DEFAULT_PORT);
@@ -39,6 +42,12 @@ public final class ServerConfig{
         validate();
     }
 
+    /**
+     * Inicia configurações carregando do arquivo base, mas sobrescrevendo a 
+     * porta de rede alvo com um valor customizado via argumento.
+     *
+     * @param port Porta alvo da aplicação TCP.
+     */
     public ServerConfig(int port) {
         Properties props = loadProperties();
         this.port = port;
@@ -49,6 +58,13 @@ public final class ServerConfig{
         validate();
     }
 
+    /**
+     * Instancia as propriedades de servidor ignorando arquivos locais, usando estritamente os parâmetros.
+     *
+     * @param port Porta na máquina da rede local.
+     * @param maxConnections Capacidade máxima de players.
+     * @param threadPoolSize Número de workers consumindo requisões em threads.
+     */
     public ServerConfig(int port, int maxConnections, int threadPoolSize) {
         this.port = port;
         this.maxConnection = maxConnections;
@@ -59,6 +75,10 @@ public final class ServerConfig{
     }
 
 
+    /**
+     * Realiza uma triagem minuciosa em restrições lógicas e limites da porta 
+     * antes de ativar o ServerSocket.
+     */
     private void validate(){
         if (port < 0 || port > 65535){
             throw new IllegalArgumentException("Port must be in [0 - 65535], got: " + port);
@@ -89,6 +109,12 @@ public final class ServerConfig{
                 '}';
     }
 
+    /**
+     * Varre a rota do classloader em busca do arquivo `.properties`.
+     * Retorna defaults em falhas no carregamento físico ou faltante.
+     *
+     * @return Um objeto instanciado preenchido com as propriedades lidas ou vazio.
+     */
     private static Properties loadProperties() {
         Properties props = new Properties();
         try (InputStream is = ServerConfig.class
@@ -107,6 +133,15 @@ public final class ServerConfig{
         return props;
     }
 
+    /**
+     * Auxiliar de análise numérica para assegurar integridade no cast textual
+     * a int caso não haja conteúdo fornecido nos options.
+     *
+     * @param props O container Properties atual.
+     * @param key A chave-alvo para formatação.
+     * @param defaultValue Valor fallback na ocorrência de mal-formação.
+     * @return Transcrição limpa de int.
+     */
     private static int parseInt(Properties props, String key, int defaultValue) {
         String value = props.getProperty(key);
         if (value == null) {

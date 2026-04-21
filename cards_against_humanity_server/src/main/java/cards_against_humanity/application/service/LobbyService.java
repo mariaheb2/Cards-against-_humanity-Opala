@@ -239,18 +239,42 @@ public class LobbyService {
         return playerRepository.findByGameId(gameId);
     }
 
+    /**
+     * Resgata dados de meta do BD referentes à partida específica.
+     *
+     * @param gameId ID alvo do lobby.
+     * @return Model Game ou Null.
+     */
     public Game getGameInfo(String gameId) {
         return gameRepository.findById(gameId).orElse(null);
     }
 
+    /**
+     * Lista todas as partidas que se encontram em estágio inicial de angariação de jogadores.
+     *
+     * @return Salas ativas marcadas no estado WAITING_PLAYERS.
+     */
     public List<Game> listActiveGames() {
         return gameRepository.findByState(GameState.WAITING_PLAYERS);
     }
 
+    /**
+     * Resgate atômico para atalhos de repositório em cascata de busca pelo ID.
+     *
+     * @param gameId UUID correspondente à sala requisitada.
+     * @return A Entidade gerenciadora Game pronta.
+     */
     public Game getGameById(String gameId) {
         return gameRepository.findById(gameId).orElse(null);
     }
 
+    /**
+     * Trata o rompimento de conexão ou uso da porta "Sair da Sala" baseado no User Tracker.
+     * Localiza a ponte relacional dele e a quebra, apagando o registro da Session de Player.
+     *
+     * @param userId Chave referencial do usuário no Auth Database.
+     * @param gameId ID da Entidade de sala referida.
+     */
     public void leaveGame(String userId, String gameId) {
         transaction.executeVoid(em -> {
             Player player = playerRepository.findByUserIdAndGameId(userId, gameId)

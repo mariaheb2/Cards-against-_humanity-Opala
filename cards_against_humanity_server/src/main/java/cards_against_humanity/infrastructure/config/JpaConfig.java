@@ -13,6 +13,12 @@ public class JpaConfig {
     private static final String PERSISTENCE_UNIT_NAME = "cards_against_humans";
     private static final EntityManagerFactory emf = createEntityManagerFactory();
 
+    /**
+     * Instancia o gerenciador global (Factory) estabelecendo conexão ao banco de dados MySQL
+     * através de variáveis de ambiente. Se ausentes, fornece credenciais padrão para ambiente de dev.
+     *
+     * @return O EntityManagerFactory atrelado exclusivamente ao contexto desta aplicação.
+     */
     private static EntityManagerFactory createEntityManagerFactory() {
         // Valores padrão
         String dbHost = getEnv("DB_HOST", "localhost");
@@ -35,11 +41,23 @@ public class JpaConfig {
         return Persistence.createEntityManagerFactory(PERSISTENCE_UNIT_NAME, props);
     }
 
+    /**
+     * Resgata variáveis de ambiente do SO ou injeta um fallback caso falhem.
+     *
+     * @param key Chave da variável almejada.
+     * @param defaultValue Alternativa segura padrão/local.
+     * @return String contendo a resolução avaliada.
+     */
     private static String getEnv(String key, String defaultValue) {
         String value = System.getenv(key);
         return (value != null && !value.isEmpty()) ? value : defaultValue;
     }
 
+    /**
+     * Rotina de inicialização ativada a cada boot do servidor Main. Valida as tabelas 
+     * e o schema inteiro usando o Hibernate. Caso esteja em uma execução vazia inédita, 
+     * semeia (seeds) dados obrigatórios como baralhos básicos (Questions/Answers) nativos da aplicação.
+     */
     public static void initialize() {
         LOGGER.info("Initializing JPA / Hibernate schema...");
         EntityManager em = emf.createEntityManager();
@@ -124,10 +142,20 @@ public class JpaConfig {
         LOGGER.info("Database schema ready.");
     }
 
+    /**
+     * Fornece um EntityManager individual (Thread-Session) gerado e vinculado
+     * diretamente à pool de gerenciamento central da fábrica ativada sob a classe.
+     *
+     * @return Transação local / EntityManager ativo.
+     */
     public static EntityManager createEntityManager() {
         return emf.createEntityManager();
     }
 
+    /**
+     * Encerra amigavelmente e liberta portas e recursos atrelados ao Pool de DB do banco de dados,
+     * impedindo vazamentos de rede/threads (Memory Leaks).
+     */
     public static void close() {
         if (emf.isOpen()) {
             emf.close();

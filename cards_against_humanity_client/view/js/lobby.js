@@ -192,6 +192,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Funções de renderização 
 
+    /**
+     * Atualiza a listagem visual do painel de jogadores on-line conectados globalmente no Socket.
+     * @param {Array} users Conjunto de dicionários dos jogadores.
+     */
     function renderOnlineUsers(users) {
         if (!users) return;
         onlineList.innerHTML = '';
@@ -210,6 +214,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    /**
+     * Compila e injeta na tela cards HTML de salas que aguardam players no Lobby principal.
+     * Adiciona interceptação de cliques aos botões daquelas não cheias.
+     * @param {Array} rooms Dados descritivos de salas abertas extraídos do payload.
+     */
     function renderOpenRooms(rooms) {
         roomsList.innerHTML = '';
         if (!rooms || rooms.length === 0) {
@@ -248,6 +257,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    /**
+     * Anima feedback visual rápido (Pill temporizado) para os formulários de criação de Cartas Customizadas.
+     * @param {string} message Mensagem descritiva a ser lida.
+     * @param {string} type Tipo de renderização (info, success, error)
+     */
     function showCardFeedback(message, type = 'info') {
         cardFeedback.textContent = message;
         cardFeedback.className = `card-feedback card-feedback-${type}`;
@@ -257,6 +271,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    /**
+     * Exibe os Toasts padronizados por tela. Usado para pop-ups de ingresso (Join).
+     * @param {string} message Texto exibido flutuante.
+     * @param {string} type Tipo gráfico de alerta.
+     */
     function showToast(message, type = 'info') {
         toast.textContent = message;
         toast.className = `toast toast-${type}`;

@@ -37,6 +37,14 @@ public class AuthService {
         return user.getId();
     }
 
+    /**
+     * Valida cruzando chave-primaria com nickname via Query do JPA para checar se a 
+     * sessão solicitando o retomo confere. Serve para o Session Restore Protocol do Cliente.
+     *
+     * @param userId Tracking Key de identificação do Usuário.
+     * @param username String contendo o registro alfanumérico estético do user em pauta.
+     * @return true em sucessos de compatibilidade, false para credenciais forjadas / invalidadas.
+     */
     public boolean validateUserById(String userId, String username) {
         Optional<User> user = userRepository.findById(userId);
         return user.isPresent() && user.get().getUsername().equals(username);

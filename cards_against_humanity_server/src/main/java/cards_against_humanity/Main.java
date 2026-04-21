@@ -16,6 +16,13 @@ public class Main {
 
     private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
 
+    /**
+     * O método de entrada inicial. Prepara a orquestração do Socket e do Banco,  
+     * sobe a aplicação para ficar ociosa aguardando clientes e engatilha um Hook 
+     * no OS para o desligamento suave ao receber SIGTERM.
+     *
+     * @param args Argumentos da linha de comando (CLI) - não consumidos pela aplicação.
+     */
     public static void main(String[] args) {
         ServerConfig config = new ServerConfig();
         TcpServer server = new TcpServer(config);

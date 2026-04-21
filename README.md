@@ -211,38 +211,23 @@ Agora, abra seu navegador (Google Chrome, Firefox, etc.) e acesse:
 
 ---
 
-## Populando as cartas
+## Populando as cartas e o Banco
 
-As tabelas são criadas automaticamente, mas as cartas precisam ser inseridas manualmente (ou via script SQL) antes de iniciar uma partida.
+> **✨ NOVIDADE:** A configuração de persistência e `JpaConfig` agora **semeia (seed) automaticamente o banco** com um deck base de dezenas de cartas (Questions e Answers) na sua primeira execução! Você não precisa mais inserir cartas na mão para começar a testar. 
 
-Conecte ao MySQL e insira ao menos algumas cartas de cada tipo:
+Caso queira estender o baralho base manualmente via SQL, você pode acessar e realizar INSERTS customizados:
 
 ```sql
 USE cards_db;
 
--- Cartas pergunta (QUESTION)
+-- Exemplo de inserção de carta preta (QUESTION)
 INSERT INTO cards (id, text, type) VALUES
-  (UUID(), 'Por que cheguei atrasado: ___', 'QUESTION'),
-  (UUID(), '___ é a razão pela qual choro no chuveiro.', 'QUESTION'),
-  (UUID(), 'O que me mantém acordado à noite: ___', 'QUESTION'),
-  (UUID(), 'Segundo os cientistas, ___ é a causa do aquecimento global.', 'QUESTION'),
-  (UUID(), 'Meu plano de aposentadoria: ___', 'QUESTION');
+  (UUID(), 'Exemplo de pergunta: ___', 'QUESTION');
 
--- Cartas resposta (ANSWER)
+-- Exemplo de inserção de carta branca (ANSWER)
 INSERT INTO cards (id, text, type) VALUES
-  (UUID(), 'Uma batata quente', 'ANSWER'),
-  (UUID(), 'Morgan Freeman narrando minha vida', 'ANSWER'),
-  (UUID(), 'O Wi-Fi caindo na hora errada', 'ANSWER'),
-  (UUID(), 'Aquela sensação de déjà vu', 'ANSWER'),
-  (UUID(), 'Um cachorro usando óculos', 'ANSWER'),
-  (UUID(), 'Acusar o estagiário', 'ANSWER'),
-  (UUID(), 'Ovos mexidos às 3 da manhã', 'ANSWER'),
-  (UUID(), 'Um complô do governo', 'ANSWER'),
-  (UUID(), 'Cheiro de gasolina', 'ANSWER'),
-  (UUID(), 'Nicolas Cage em seu melhor momento', 'ANSWER');
+  (UUID(), 'Minha resposta customizada', 'ANSWER');
 ```
-
-> **Mínimo recomendado:** 5+ perguntas e 10+ respostas (cada jogador recebe 5 cartas na mão).
 
 ---
 
@@ -493,29 +478,40 @@ telnet localhost 8080
 │   │   │   │   └── repository/               # Interfaces de repositório
 │   │   │   ├── infrastructure/
 │   │   │   │   ├── config/
-│   │   │   │   │   └── JpaConfig.java        # EntityManagerFactory singleton
-│   │   │   │   ├── persistence/              # Implementações JPA (MySQL)
-│   │   │   │   ├── security/                 # BCrypt para senhas
+│   │   │   │   │   └── JpaConfig.java        # Entity Manager, Conexões DB e Auto-Seed
+│   │   │   │   ├── persistence/              # Repositórios JPA (CRUDs no MySQL)
+│   │   │   │   ├── security/                 # BCrypt e Hashes de autenticação
 │   │   │   │   └── transaction/
-│   │   │   │       └── Transaction.java      # begin/commit/rollback/close
+│   │   │   │       └── Transaction.java      # Wrappers Transacionais em queries
 │   │   │   ├── network/
-│   │   │   │   └── dto/                      # DTOs de request/response
+│   │   │   │   └── dto/                      # JSON Payload Mapping Objects
 │   │   │   └── server/
-│   │   │       ├── TcpServer.java            # Accept loop + wiring
-│   │   │       ├── ClientHandler.java        # Lê/escreve TCP por cliente
-│   │   │       ├── ClientRegistry.java       # Mapa clientId ↔ userId
-│   │   │       ├── ServerConfig.java         # Lê config.properties
+│   │   │       ├── TcpServer.java            # Main Accept loop + Thread Pools
+│   │   │       ├── ClientHandler.java        # Ciclo de Vida individual e Roteamento WS
+│   │   │       ├── ClientRegistry.java       # Mapa reversos de Conexões e Broadcast
+│   │   │       ├── ServerConfig.java         # Parser e validador de propriedades
 │   │   │       └── event/
-│   │   │           ├── EventBus.java         # Publish/subscribe thread-safe
-│   │   │           ├── EventType.java        # Tipos de eventos internos
-│   │   │           └── GameEvent.java        # Evento imutável
+│   │   │           ├── EventBus.java         # Dispatcher estático Singleton Local
+│   │   │           ├── EventType.java        # Enum de Ações (PLAY_CARD, etc)
+│   │   │           └── GameEvent.java        # Immutable State Packages
 │   │   └── resources/
 │   │       ├── META-INF/
-│   │       │   └── persistence.xml           # Configuração JPA/Hibernate + MySQL
+│   │       │   └── persistence.xml           # Configuração JPA, Users BD e URL MySQL
 │   │       └── config/
-│   │           └── config.properties         # Porta, threads, charset
-│   └── test/                                 # Testes JUnit 5 + Mockito
+│   │           └── config.properties         # Metadados configuracionais do Server
+│   └── test/                                 # Rotinas e Testes TDD em JUnit 5
 ```
+
+---
+
+## Documentação Técnica do Código (Javadocs/JSDocs)
+
+Nosso esforço abrange não só a documentação global, mas **Documentação em Nível de Código Exaustiva**. 
+Ao abrir e ler o código contido neste repositório você notará:
+
+* Todos os métodos cruciais de conexão na pasta **`cards_against_humanity.server`** têm os ciclos de vida de Threads detalhadamente documentados em **Javadoc**.
+* As transações ORM (Hibernate) na pasta **`infrastructure.persistence`** também são documentadas.
+* As interfaces do frontend HTML para o Node Proxy em **`cards_against_humanity_client/view/js`** possuem documentação extensiva em **JSDoc**, explicando mecânicas de DOM Parsing, Renderizações Animadas (CSS stagger) e pacotes WebSocket de manipulação de Lobbys.
 
 ---
 

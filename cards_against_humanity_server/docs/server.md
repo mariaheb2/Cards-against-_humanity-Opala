@@ -44,27 +44,44 @@ cards_against_humanity/
 
 ---
 
-## Classes Principais
+## Classes e Implementações de Comunicação
 
-### `TcpServer`
+### 1. `TcpServer` (Aceitação de Conexões)
 
-Responsável por:
-- Criar o `ServerSocket` na porta configurada
-- Iniciar o **accept loop** em uma daemon thread (`tcp-accept-loop`)
-- Submeter cada novo cliente ao `ExecutorService` (thread pool fixo)
-- Rejeitar conexões quando o limite máximo é atingido
-- Parar via `stop()` (fecha o socket e aguarda o pool encerrar)
+Responsável por escutar e administrar a entrada de conexões físicas.
+- **Como funciona:** Inicializa um `ServerSocket` em uma porta. Através da daemon thread `tcp-accept-loop`, aguarda infinitamente clientes no método `accept()`. Ao conectar, se a capacidade de rede permitir, fornece um `ClientHandler` à nova conexão rodando no pool (`ExecutorService`).
+- **Linhas Relacionadas (`TcpServer.java`):**
+  - **`start()` (linhas 95-107):** Inicia a escuta da porta base e levanta a thread `acceptLoop`.
+  - **`acceptLoop()` (linhas 141-168):** O loop infinito executando `serverSocket.accept()`. Submete os novos clientes paralelizando-os em `executor.submit(handler)`.
+  - **`rejectConnection()` (linhas 170-180):** Envia `{"type":"ERROR"}` forçadamente negando serviço caso o limite de `max_connections` seja atingido pela plataforma de entrada, fechando o stream.
 
-```java
-TcpServer server = new TcpServer();  // usa config.properties
-server.start();
-// ...
-server.stop();
-```
+### 2. `ClientHandler` (Leitura, Escrita e Roteamento)
+
+Esta é a classe que suporta *toda a comunicação direta bidirecional* com o cliente, usando mensagens formatadas em JSON.
+- **Como funciona (Leitura/Escrita):** O cliente possui uma Thread própria com acesso a objetos de I/O em formato `UTF-8`. As rotas separam-se por quebras de linha (`\n`). O `readLoop` atua iterando via rede continuamente as requisições.
+- **Como funciona (Roteamento):** Intercepta o pacote JSON formatado, acessa seu campo string `"type"` num modelo unificado que propaga o pedido a canais lógicos usando o `switch` entre `GameService`, `LobbyService` e afins.
+- **Linhas Relacionadas (`ClientHandler.java`):**
+  - **`openStreams()` (linhas 106-109):** Inicialização dos fluxos `BufferedReader` (`in`) e `PrintWriter` (`out`).
+  - **`send()` (linhas 111-116):** Usado em toda comunicação descendente. Modela e empurra usando `.println(message)` na rede do target.
+  - **`readLoop()` (linhas 132-140):** Escuta síncrona bloqueante via `in.readLine()`, efetuando log persistente das instâncias que delegam mensagens.
+  - **`handleMessage()` (linhas 142-209):** *Dispatch* principal. Extrai o JsonPayload e intercede por comandos (`REGISTER`, `CREATE_GAME`, `JOIN_GAME`...).
+  - **`dispatchGameEvent()` (linhas 219-242):** Delegação de eventos complexos. Mensagens de fluxo de mesa em jogo (`PLAY_CARD`, `START_GAME`) perdem escopo neste controller e são enviadas ao integrador desacoplado `EventBus`, garantindo o envio a `GameEventHandler`.
+
+### 3. Rotinas Multiplayer (Lobby & Broadcast)
+
+- **Como funciona:** Funcionalidades de multiplayer requerem acesso `server-to-client` não-bloqueantes. Notificações globais e pedidos de autorização buscam as referências de conexão de terceiros mapeadas globalmente e encaminham informações de forma paralela.
+- **Linhas Relacionadas (`ClientHandler.java`):**
+  - **Notificações de Grupo (`broadcastToGame()` - linhas 643-661):** Usado no acompanhando do ciclo de vida dos jogadores (ex: `PLAYER_JOINED`). Recupera todos jogadores de um time no `LobbyService`, detecta sua conexão (`registry.getClientIdByUserId()`) e dispara mensagens em cadeia.
+  - **Interpelação "Dono de Sala" (`handleRequestJoin()` - linhas 500-551):** Para entradas dinâmicas, encontra o UID do host do jogo, busca a referência Socket vinculada a si e envia um sub-payload acionando em front-end o modal de aprovação sem afetar outros usuários.
+
+### 4. Gestores (`ClientRegistry` & `EventBus`)
+
+- **`ClientRegistry`:** Mapas Thread-Safe encapsulando vínculos `clientId` (Socket) x UUID do Usuário Autenticado. Ele suporta metódos que viabilizam o `broadcastToGame` provendo envios individualizados (`registry.sendTo()`).
+- **`EventBus`:** Barramento logico em memória que desconecta dependencias de manipulação de rede do fluxo e processamento em loop do turno dos baralhos e jogadores.
 
 ### `ServerConfig`
 
-Carrega as configurações do classpath (`config/config.properties`). Se o arquivo não for encontrado, usa os valores padrão.
+Carrega as configurações do classpath (`config/config.properties`).
 
 | Propriedade               | Padrão | Descrição                              |
 |---------------------------|--------|----------------------------------------|
@@ -73,28 +90,6 @@ Carrega as configurações do classpath (`config/config.properties`). Se o arqui
 | `server.thread_pool_size` | `50`   | Tamanho do pool de threads             |
 | `server.backlog`          | `50`   | Fila de conexões pendentes (SO_BACKLOG)|
 | `server.charset`          | `UTF-8`| Codificação das mensagens de texto     |
-
-### `ClientHandler`
-
-Implementa `Runnable`. Ciclo de vida por conexão:
-
-1. Abre streams de I/O
-2. Registra-se no `ClientRegistry`
-3. Envia mensagem de boas-vindas (`CONNECTED`)
-4. **Loop de leitura** — lê linhas JSON e chama `handleMessage()`
-5. Em `finally`: desregistra e fecha o socket
-
-O método `handleMessage(String rawMessage)` é o **ponto de extensão** principal — toda a lógica de negócio parte daqui.
-
-### `ClientRegistry`
-
-Mapa thread-safe (`ConcurrentHashMap`) de `clientId → ClientHandler`. Permite:
-
-```java
-registry.broadcast(jsonMessage);          // envia para todos
-registry.sendTo(clientId, jsonMessage);   // envia para um cliente específico
-registry.getConnectionCount();            // número de conexões ativas
-```
 
 ---
 
@@ -159,26 +154,31 @@ Crie ou atualize o **Service** correspondente (ex: `UserService`, `GameService`)
 
 ### Passo 5 — Conectar ao `handleMessage()`
 
-O método `ClientHandler.handleMessage()` é o dispatcher central atual. Enquanto o router de mensagens não for implementado, adicione um `case` diretamente:
+O método `ClientHandler.handleMessage()` atua como dispatcher central (linhas 142-209). Adicione um `case` diretamente no bloco switch:
 
 ```java
 // ClientHandler.java
 protected void handleMessage(String rawMessage) {
-    // Parse do campo "type" do JSON
-    // Exemplo de switch a implementar:
-    //
-    // switch (type) {
-    //     case "MINHA_ACAO" -> send(minhaAcaoService.handle(clientId, payload));
-    //     case "REGISTER"   -> send(userService.register(clientId, payload));
-    //     ...
-    // }
+    // ... parse do JSON ...
+    switch (type) {
+        // ...
+        case MINHA_ACAO:
+            handleMinhaAcao(payload);
+            break;
+    }
+}
+
+private void handleMinhaAcao(JsonObject payload) {
+    // Implemente a ponte para seu Service
+    // String data = payload.get("data").getAsString();
+    // service.call(data);
     
-    // Stub atual (ECHO) — substituir conforme serviços forem implementados
-    send("{\"type\":\"ECHO\",\"payload\":" + rawMessage + "}");
+    // Responder ao cliente
+    // send(MessageType.MINHA_ACAO_SUCCESS, new JsonObject());
 }
 ```
 
-> **Próximo passo arquitetural:** implementar um `MessageRouter` que extraia o campo `"type"` e despache para `AuthHandler` / `GameHandler`, mantendo `ClientHandler` livre de lógica de negócio.
+> **Dica arquitetural:** Mensagens referentes à execução interna da partida não devem ser resolvidas diretamente. Inclua-as em `toEventType()` e redirecione usando o pipeline provido para o `EventBus`.
 
 ### Passo 6 — Testar manualmente
 

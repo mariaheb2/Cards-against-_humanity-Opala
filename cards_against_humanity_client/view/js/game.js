@@ -147,10 +147,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Polling a cada 5s como fallback para garantir sincronização
     pollInterval = setInterval(requestGameInfo, 5000);
 
+    /**
+     * Dispara requisição on-demand forçando o servidor a jogar o estado inteiro (Snapshot)
+     * para remapear e renderizar os dados assíncronos da base na array local.
+     */
     function requestGameInfo() {
         window.gameClient.send('GET_GAME_INFO', { gameCode, gameId: gameCode });
     }
 
+    /**
+     * Encerra o intervalo paralelo de repescagem de dados em polling para poupar network 
+     * e liberar recursos quando o jogo iniciar ou quando da página for quitada.
+     */
     function stopPolling() {
         if (pollInterval) {
             clearInterval(pollInterval);
@@ -209,6 +217,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Helpers 
 
+    /**
+     * Limpa o tracking local de presenças e cruza com a resposta canônica (DB) originária
+     * do snapshot REST. Previne dessincronia na Listagem ao aceitar players.
+     * @param {Array} players O array puxado do payload JSON.
+     */
     function syncPlayersList(players) {
         // Limpa e recarrega pelo snapshot do servidor
         Object.keys(playersList).forEach(k => delete playersList[k]);
@@ -246,6 +259,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    /**
+     * Calcula as balizas de contagem (Limites de Sala), ajusta a dimensão ProgressBar e exibe 
+     * o start-game restritivamente destrancado apenas para Host (Owner) na espera de Lobby.
+     */
     function updateUI() {
         document.getElementById('current-players').innerText = currentPlayersCount;
         document.getElementById('max-players').innerText = maxPlayers || '?';

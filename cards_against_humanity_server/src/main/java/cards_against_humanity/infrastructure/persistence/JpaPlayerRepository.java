@@ -10,10 +10,20 @@ public class JpaPlayerRepository implements PlayerRepository {
 
     private final Transaction transaction;
 
+    /**
+     * Inicia a implementação concreta de Repositório habilitando a injeção da class Transaction.
+     */
     public JpaPlayerRepository() {
         this.transaction = new Transaction();
     }
 
+    /**
+     * Salva ou atualiza os metadados de uma entidade Player transitoriamente vinculada a uma Sala.
+     * Retorna a entidade incorporada ao EntityManager.
+     *
+     * @param player O Player mapeado.
+     * @return O Player salvo sob controle orgânico do JPA.
+     */
     @Override
     public Player save(Player player) {
         return transaction.execute(em -> {
@@ -24,11 +34,22 @@ public class JpaPlayerRepository implements PlayerRepository {
         });
     }
 
+    /**
+     * Localiza um Player temporário dentro da sessão através de sua chave privada de escopo.
+     *
+     * @param id String do Player ID.
+     * @return Optional prevenindo erros caso a entidade já tenha caído.
+     */
     @Override
     public Optional<Player> findById(String id) {
         return transaction.execute(em -> Optional.ofNullable(em.find(Player.class, id)));
     }
 
+    /**
+     * Despeja todas as instâncias persistentes contendo jogadores engajados em salas globalmente.
+     *
+     * @return List englobando todo o escopo estendido da tabela.
+     */
     @Override
     public List<Player> findAll() {
         return transaction.execute(em ->
@@ -36,6 +57,11 @@ public class JpaPlayerRepository implements PlayerRepository {
         );
     }
 
+    /**
+     * Corta a existência de um jogador de um game, mesclando e dando commit na extração.
+     *
+     * @param player Referência instanciada que sofrerá expurgo.
+     */
     @Override
     public void delete(Player player) {
         transaction.executeVoid(em -> {
@@ -44,6 +70,11 @@ public class JpaPlayerRepository implements PlayerRepository {
         });
     }
 
+    /**
+     * Variante pura da exclusão encurtada, eliminando entidades Player via string ID.
+     *
+     * @param id A UUID serializada da deleção.
+     */
     public void deleteById(String id) {
         transaction.executeVoid(em -> {
             Player player = em.find(Player.class, id);
@@ -53,6 +84,13 @@ public class JpaPlayerRepository implements PlayerRepository {
         });
     }
 
+    /**
+     * Promove uma busca baseada no relacionamento de sub-chaves retornando
+     * uma Array contendo estritamente participantes ativos em certa Sala (gameId).
+     *
+     * @param gameId ID do parent da rodada (Game).
+     * @return Todos os Players populando o ambiente citado em forma List.
+     */
     @Override
     public List<Player> findByGameId(String gameId) {
         return transaction.execute(em ->
@@ -62,6 +100,14 @@ public class JpaPlayerRepository implements PlayerRepository {
         );
     }
 
+    /**
+     * Traz atômica e seletivamente um avatar do perfil User submerso num Lobby.
+     * Une e confirma que a Chave do Usuário coincide com a FK do Jogo acessado.
+     *
+     * @param userId A Chave relacional permanente do usuário no sistema.
+     * @param gameId O container / Sala onde ele encontra-se efêmeramente.
+     * @return Embalagem Optional com blindagem NullPointer.
+     */
     @Override
     public Optional<Player> findByUserIdAndGameId(String userId, String gameId) {
         return transaction.execute(em -> {

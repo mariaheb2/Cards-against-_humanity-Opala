@@ -12,10 +12,20 @@ public class JpaGameRepository implements GameRepository {
 
     private final Transaction transaction;
 
+    /**
+     * Construtor da implementação do Repositório. Inicializa a ponte de transações locais.
+     */
     public JpaGameRepository() {
         this.transaction = new Transaction();
     }
 
+    /**
+     * Atualiza um jogo modificado ou insere um novo no banco de dados.
+     * Executado sob um contexto managed. Retorna a entidade acoplada.
+     *
+     * @param game O objeto do tipo Game com dados prontos.
+     * @return Game rastreado pelo ORM.
+     */
     @Override
     public Game save(Game game) {
         return transaction.execute(em -> {
@@ -26,11 +36,22 @@ public class JpaGameRepository implements GameRepository {
         });
     }
 
+    /**
+     * Consulta atômica isolada pegando um jogo baseado na sua PK UUID.
+     *
+     * @param id String do gameId / gameCode.
+     * @return Instância Optional para prevenção amigável de Nulls.
+     */
     @Override
     public Optional<Game> findById(String id) {
         return transaction.execute(em -> Optional.ofNullable(em.find(Game.class, id)));
     }
 
+    /**
+     * Requisita um apanhado contendo estritamente todas as linhas da tabela de jogos.
+     *
+     * @return Lista das rodadas recuperadas.
+     */
     @Override
     public List<Game> findAll() {
         return transaction.execute(em ->
@@ -38,6 +59,12 @@ public class JpaGameRepository implements GameRepository {
         );
     }
 
+    /**
+     * Desintegra as restrições e relacionamentos removendo a chave instanciada do banco.
+     * Realiza um merge momentâneo se o elemento se soltou do Entity context (detached) antes de apagar.
+     *
+     * @param game A referência.
+     */
     @Override
     public void delete(Game game) {
         transaction.executeVoid(em -> {
@@ -46,6 +73,11 @@ public class JpaGameRepository implements GameRepository {
         });
     }
 
+    /**
+     * Expurga uma rodada sob comando estrito de seu ID evitando trânsito demorado do objeto inteiro em rede para remover.
+     *
+     * @param id UUID texto limpo da PK do jogo.
+     */
     public void deleteById(String id) {
         transaction.executeVoid(em -> {
             Game game = em.find(Game.class, id);
@@ -55,6 +87,13 @@ public class JpaGameRepository implements GameRepository {
         });
     }
 
+    /**
+     * Filtra eficientemente e converte as buscas atrelando o Enum de situação
+     * à filtragem no SELECT da query do banco.
+     *
+     * @param state O Status atual, por exemplo PLAYERS_PLAYING.
+     * @return Jogos detectados no status apontado.
+     */
     @Override
     public List<Game> findByState(GameState state) {
         return transaction.execute(em ->
@@ -64,6 +103,13 @@ public class JpaGameRepository implements GameRepository {
         );
     }
 
+    /**
+     * Identificando relações profundas, varre a Join table g.players em cruzamento
+     * atrás da sala on-line em que certo Player encontra-se associado.
+     *
+     * @param playerId UUID de banco do Player listado num jogo.
+     * @return O respectivo palco da partida sob Optional de uso seguro.
+     */
     @Override
     public Optional<Game> findByPlayerId(String playerId) {
         return transaction.execute(em -> {

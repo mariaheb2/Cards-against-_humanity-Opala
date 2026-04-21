@@ -99,6 +99,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Handlers dos eventos de jogo
 
+    /**
+     * Instancia o palco para o começo de um novo Round. Limpa a mesa, exibe a Black Card,
+     * atualiza o HUD apontando o Tsar da vez, carrega as mãos recém pescadas dos players e oculta áreas passadas.
+     * @param {Object} payload Metadados completos da nova rodada originados do Java.
+     */
     function onNewRound(payload) {
         currentRound = payload.round;
         isJudge = payload.isJudge;
@@ -133,6 +138,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateStatusLabel();
     }
 
+    /**
+     * Intercepta o aviso de que alguém acabou de colocar uma resposta virada para baixo na mesa.
+     * Atualiza o contador de jogadores e coloca um Ponto verde "Played Dot" na tela do Tsar.
+     * @param {Object} payload Payload contendo username de quem jogou.
+     */
     function onPlayerPlayed(payload) {
         playerDots[payload.playerId] = true;
         updateStatusLabel();
@@ -141,6 +151,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         addPlayedDot(payload.username);
     }
 
+    /**
+     * Desperta a View do Juiz/Tsar de forma a destrancar as cartas brancas colocadas
+     * na mesa pelos players. Oculta para os não-juízes exibindo mensagens de aguardo.
+     * @param {Object} payload Pacote contendo `playedCards` embaralhadas limpas.
+     */
     function onJudgeSelecting(payload) {
         if (isJudge) {
             const area = document.getElementById('judge-area');
@@ -171,10 +186,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    /**
+     * Reage ao evento REVEAL_CARDS. Revela graficamente as cartas brancas anônimas
+     * enquanto o juiz toma sua decisão clicando sobre qual achar melhor.
+     * @param {Object} payload Empacotamento de Cartas.
+     */
     function onCardsRevealed(payload) {
         showJudgeArea(payload.playedCards, payload.gameId);
     }
 
+    /**
+     * É invocado após o clique final do Juiz na carta vencedora. Computa o ponto extra da partida 
+     * na interface de Scoreboard e exibe um Pop-up Modal parabenizando a resposta.
+     * @param {Object} payload Empacotamento de vitórias e placar em tempo real.
+     */
     function onRoundResult(payload) {
         // Atualiza placar
         if (payload.scores) {
@@ -187,6 +212,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         showRoundResultModal(payload);
     }
 
+    /**
+     * Ocorre estritamente quando algum player quebra a restrição TargetScore definida nas Options.
+     * Trava o fluxo, invoca o Modal the Game Finished e instiga os Animadores de vitória no CSS.
+     * @param {Object} payload Placar Final canônico.
+     */
     function onGameFinished(payload) {
         // Garante que o placar está atualizado
         if (payload.finalScores) {
@@ -199,6 +229,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Renderização: cartas da mão 
 
+    /**
+     * Cria e popula graficamente toda a mão local do Jogador preenchendo os nodes.
+     * Instala OnClick e KeyDown Listeners nas cartas interativas.
+     * @param {Array} hand Array de textos do deck Branco pescados da base.
+     */
     function renderHand(hand) {
         const container = document.getElementById('hand-cards');
         container.innerHTML = '';
@@ -226,6 +261,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    /**
+     * Prepara e dá Toggle (Highlight Border CSS) na carta escolhida pela UI de clique mas que 
+     * ainda aguarda ser ativamente jogada.
+     * @param {string} cardId ID do banco de dados da carta selecionada.
+     * @param {Element} el Target DOM Element (a div da carta em si).
+     */
     function selectCard(cardId, el) {
         if (isJudge || hasPlayed) return;
 
@@ -239,6 +280,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         playSelectedCard();
     }
 
+    /**
+     * Envia em definitivo a requisição de Card Drop pelo TCP Socket. 
+     * Congela a mão restante do player localmente marcando o state 'hasPlayed'.
+     */
     function playSelectedCard() {
         if (!selectedCardId || hasPlayed) return;
         hasPlayed = true;
@@ -260,6 +305,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Renderização: área do juiz 
 
+    /**
+     * Desenha a matriz (Grid) de opções brancas secretas na frente do Juiz.
+     * Stagger (Adia com timeout progressivo) o reveal das cartas via class injection para fluidez css.
+     *
+     * @param {Array} playedCards Vetor de respostas submetidas.
+     * @param {string} gId Game lobby original da partida.
+     */
     function showJudgeArea(playedCards, gId) {
         const area = document.getElementById('judge-area');
         const grid = document.getElementById('played-cards-grid');
@@ -315,6 +367,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         area.style.display = 'none';
     }
 
+    /**
+     * Despacha a requisição de Consagração definindo a carta que vence validado pelo Tsar/Juiz.
+     * Congela a UI para aguardar processamento do Servidor em Backend.
+     * @param {string} playedCardId O UUID da jogada gravada almejada.
+     * @param {string} gId Game Identifier nativo da sala.
+     */
     function selectWinner(playedCardId, gId) {
         // Desabilita todas as cartas após seleção
         document.querySelectorAll('.played-card').forEach(c => {

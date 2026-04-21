@@ -103,33 +103,59 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Inicializa os fluxos de leitura e gravação assíncrona orientados pelo socket.
+     * 
+     * @throws IOException Caso ocorra um erro instanciando in/out.
+     */
     private void openStreams() throws IOException {
         out = new PrintWriter(socket.getOutputStream(), true);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream(), charset));
     }
 
-    // Sends a raw JSON string to the client
+    /**
+     * Envia uma mensagem em formato estrito ao cliente remoto se ativo.
+     *
+     * @param message Texto/Payload a ser despachado pelo Socket.
+     */
     public void send(String message) {
         if (out != null && !socket.isClosed()) {
             out.println(message);
         }
     }
 
-    // Greetings to new clients
+    /**
+     * Fornece credencial inicial de sistema para o cliente, informando seu clientId.
+     */
     private void sendWelcome() {
         send("{\"type\":\"CONNECTED\",\"payload\":{\"clientId\":\"" + clientId + "\"}}");
         LOGGER.fine("[" + clientId + "] Welcome message sent.");
     }
 
+    /**
+     * Recupera o Client ID único desta conexão.
+     *
+     * @return O UUID gerado.
+     */
     public String getClientId() {
         return clientId;
     }
 
+    /**
+     * Determina o status da conexão associada com o cliente.
+     *
+     * @return true se o socket subjacente estiver conectado e ativo.
+     */
     public boolean isConnected() {
         return socket != null && !socket.isClosed() && socket.isConnected();
     }
 
-    // Runs until the client closes the connection or an error occurs
+    /**
+     * Laço fundamental de captação de requisições enviadas pelo cliente.
+     * Executa ininterruptamente delegando cada mensagem para processamento.
+     *
+     * @throws IOException Caso uma falha ocorra lendo a stream.
+     */
     private void readLoop() throws IOException {
         String line;
         while ((line = in.readLine()) != null) {
@@ -139,6 +165,12 @@ public class ClientHandler implements Runnable {
         LOGGER.info("[" + clientId + "] Connection closed.");
     }
 
+    /**
+     * Interpreta a mensagem JSON de entrada, mapeia para MessageType, avalia
+     * se exige autenticação, extrai o Payload e redireciona (ou processa).
+     *
+     * @param rawMessage O envelope cru enviado pelo cliente TCP.
+     */
     protected void handleMessage(String rawMessage) {
         LOGGER.fine("[" + clientId + "] Received: " + rawMessage);
         try {
@@ -270,6 +302,11 @@ public class ClientHandler implements Runnable {
         eventBus.publish(new GameEvent(type, clientId, gameId, meta));
     }
 
+    /**
+     * Processa o registro de uma nova conta de usuário.
+     *
+     * @param payload Objeto JSON que hospeda os atributos username, email e password.
+     */
     private void handleRegister(JsonObject payload) {
         RegisterRequest request = new RegisterRequest();
         request.setUsername(payload.get("username").getAsString());
@@ -286,6 +323,12 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Processa o login do usuário autenticando as credenciais, associando
+     * o userId e retornando as informações para a sessão.
+     *
+     * @param payload Objeto contendo email e password.
+     */
     private void handleLogin(JsonObject payload) {
         LoginRequest request = new LoginRequest();
         request.setEmail(payload.get("email").getAsString());
@@ -325,6 +368,12 @@ public class ClientHandler implements Runnable {
         return obj;
     }
 
+    /**
+     * Tenta refazer o vínculo de sessão de um cliente por restauro instantâneo,
+     * verificando a id de usuário submetida contra o serviço de auth.
+     *
+     * @param payload Dados essenciais de cache para retomada do acesso.
+     */
     private void handleRestoreSession(JsonObject payload) {
         String userId = payload.get("userId").getAsString();
         String username = payload.get("username").getAsString();
@@ -342,6 +391,10 @@ public class ClientHandler implements Runnable {
         send(MessageType.RESTORE_SESSION, response);
     }
 
+    /**
+     * Trata o pedido de listagem global enviando todos os usuários atualmente marcados
+     * como online pelo rastreamento central do ClientRegistry.
+     */
     private void handleListUsers() {
         JsonArray usersArray = new JsonArray();
         for (Map<String, String> user : registry.getAllOnlineUsers()) {
@@ -355,6 +408,12 @@ public class ClientHandler implements Runnable {
         send(MessageType.USER_LIST, payload);
     }
 
+    /**
+     * Processa a criação e inicialização de um ambiente de partida vazio
+     * que serve de Lobby e atrela os dados do jogo gerados à referida sessão.
+     *
+     * @param payload Atributos definidores como MaxPlayers, etc.
+     */
     private void handleCreateGame(JsonObject payload) {
         int maxPlayers = payload.get("maxPlayers").getAsInt();
         int targetScore = payload.has("targetScore") ? payload.get("targetScore").getAsInt() : 8;
@@ -365,6 +424,13 @@ public class ClientHandler implements Runnable {
         send(MessageType.GAME_CREATED, resp);
     }
 
+    /**
+     * Processa a entrada de um jogador em uma sala, baseando-se em seu código ou ID.
+     * Além de confirmar a entrada ao jogador, deflagra um evento de broadcast
+     * global indicando à sala sobre o novo entrante.
+     *
+     * @param payload Json com gameCode ou gameId.
+     */
     private void handleJoinGame(JsonObject payload) {
         // Aceita o código tanto em 'gameCode' quanto em 'gameId'
         String gameId = payload.has("gameCode")
@@ -393,6 +459,12 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Processa o resgate de informações completas de uma sala de jogo para visualização de quem já está dentro.
+     * Traz os metadados da sala e a lista detalhada e serializada de cada participante.
+     *
+     * @param payload Objeto possuindo o gameCode originário da sala.
+     */
     private void handleGetGameInfo(JsonObject payload) {
         // Aceita tanto 'gameCode' quanto 'gameId'
         String gameCode = payload.has("gameCode")
@@ -428,6 +500,12 @@ public class ClientHandler implements Runnable {
         send(MessageType.GAME_UPDATE, resp);
     }
 
+    /**
+     * Efetua a remoção coordenada de um participante da sala especificada, permitindo-o retornar ao Lobby Principal.
+     * Triggers são propagados indiretamente ou manualmente pós-saída.
+     *
+     * @param payload Objeto determinando de qual sala o jogador sairá via "gameCode".
+     */
     private void handleLeaveGame(JsonObject payload) {
         String gameCode = payload.get("gameCode").getAsString();
         lobbyService.leaveGame(authenticatedUserId, gameCode);
@@ -442,7 +520,7 @@ public class ClientHandler implements Runnable {
     /**
      * Trata CREATE_CARD: cria uma carta customizada (QUESTION ou ANSWER) no banco.
      *
-     * Payload esperado: { text: string, cardType: "QUESTION" | "ANSWER" }
+     * @param payload Payload esperado: { text: string, cardType: "QUESTION" | "ANSWER" }
      */
     private void handleCreateCard(JsonObject payload) {
         if (authenticatedUserId == null) {
@@ -469,7 +547,7 @@ public class ClientHandler implements Runnable {
     // ─── Listagem de salas abertas ──────────────────────────────────────────────
 
     /**
-     * Trata LIST_OPEN_ROOMS: retorna todas as salas no estado WAITING_PLAYERS.
+     * Trata LIST_OPEN_ROOMS: retorna todas as salas no estado WAITING_PLAYERS agregando ao pacote os donos.
      */
     private void handleListOpenRooms() {
         try {
@@ -501,7 +579,7 @@ public class ClientHandler implements Runnable {
      * Trata REQUEST_JOIN: o jogador solicitante pede para entrar via lista de salas.
      * Envia um pop-up (JOIN_REQUEST) para o dono da sala com um requestId.
      *
-     * Payload esperado: { gameId: string }
+     * @param payload Payload esperado: { gameId: string }
      */
     private void handleRequestJoin(JsonObject payload) {
         if (authenticatedUserId == null) {
@@ -554,7 +632,7 @@ public class ClientHandler implements Runnable {
      * Trata APPROVE_JOIN: o dono da sala aprova a entrada do solicitante.
      * Chama joinGame e faz broadcast de PLAYER_JOINED.
      *
-     * Payload esperado: { requestId: string }
+     * @param payload Payload esperado: { requestId: string }
      */
     private void handleApproveJoin(JsonObject payload) {
         if (authenticatedUserId == null) {
@@ -607,9 +685,9 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Trata REJECT_JOIN: o dono da sala rejeita a entrada do solicitante.
+     * Trata REJECT_JOIN: o dono da sala rejeita a entrada do solicitante via Popup ID.
      *
-     * Payload esperado: { requestId: string }
+     * @param payload Payload esperado: { requestId: string }
      */
     private void handleRejectJoin(JsonObject payload) {
         if (authenticatedUserId == null) {
@@ -641,9 +719,12 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Envia uma mensagem para todos os jogadores de uma sala.
-     * Percorre a lista de jogadores via LobbyService e envia para cada clientId
-     * mapeado no registry.
+     * Envia uma mensagem para todos os jogadores de uma sala de modo generalista.
+     * Percorre a lista de jogadores via LobbyService e envia para cada clientId iterativamente.
+     * 
+     * @param gameId ID do jogo alvo.
+     * @param type Flag definindo o formato da mensagem.
+     * @param payload O conteúdo injetado.
      */
     private void broadcastToGame(String gameId, MessageType type, JsonObject payload) {
         java.util.List<Player> players = lobbyService.getPlayersInGame(gameId);
@@ -660,6 +741,10 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Realiza a autolimpeza da thread e da rotina, desligando permanentemente as conexões
+     * amarradas ao socket TCP e se auto-destruindo do ClientRegistry global da nuvem do aplicativo.
+     */
     private void cleanup() {
         registry.unregister(clientId);
         try {
