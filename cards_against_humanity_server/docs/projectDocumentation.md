@@ -375,6 +375,10 @@ Telas:
 
 ![1776774355219](images/projectDocumentation/1776774355219.png)
 
+![1776774445167](images/projectDocumentation/1776774445167.png)
+
+
+
 ## Link do repositório:
 
 https://gitlab.com/jala-university1/cohort-4/PT.CO.CSNT-245.GA.T1.26.M2/SA/equipe-1
