@@ -1,3 +1,8 @@
+/**
+ * Arquivo Entrypoint de Middleware em Node.js.
+ * Cumpre a dupla finalidade de "Batedor" (Servidor Estático em portas HTTP) e 
+ * Proxy WebSocket <-> TCP (Converte dados de pacotes WS do Browser para Fluxos de Socket Raw ao Servidor Java).
+ */
 const WebSocket = require('ws');
 const net = require('net');
 const http = require('http');
@@ -18,6 +23,10 @@ const mimeTypes = {
     '.jpg': 'image/jpeg',
 };
 
+/**
+ * Criação da Engine leve de Servidor HTTP nativa do Node.
+ * Resolve Rotas SPA (Single Page Application) e engata os mimeTypes de leitura de fs.
+ */
 // Cria um servidor HTTP único
 const server = http.createServer((req, res) => {
     let filePath = req.url === '/' ? '/login.html' : req.url.split('?')[0];
@@ -41,12 +50,20 @@ const server = http.createServer((req, res) => {
     });
 });
 
+/**
+ * Utilizando a engine do pacote 'ws', anexa e dá "Upgrade" na rota HTTP 
+ * permitindo que a mesma porta faça handshake de WebSockets WSS/WS.
+ */
 // Anexa o WebSocket ao mesmo servidor HTTP
 const wss = new WebSocket.Server({ server });
 
 console.log(`🔌 WebSocket proxy integrado ao servidor HTTP na porta ${PORT}`);
 console.log(`🔄 Proxy TCP para ${TCP_HOST}:${TCP_PORT}`);
 
+/**
+ * Interceptador Principal de Conexão.
+ * Rodado sempre que uma das abas de client HTML requisita ingressar na sala ou fazer Login.
+ */
 wss.on('connection', (ws, req) => {
     const clientAddr = req.socket.remoteAddress;
     console.log(`[WS] Cliente ${clientAddr} conectado`);
@@ -54,10 +71,18 @@ wss.on('connection', (ws, req) => {
     let tcpSocket = null;
     let isClosing = false;
 
+    /**
+     * Túnel Backend -> Assim que há aceite de WS, instanciamos a API net (Socket Raw) 
+     * e o Node tenta atrelar-se de imediato ao Thread Pool do Java em outra aba/server.
+     */
     tcpSocket = net.createConnection({ host: TCP_HOST, port: TCP_PORT }, () => {
         console.log(`[TCP] Conectado ao servidor Java para ${clientAddr}`);
     });
 
+    /**
+     * Transceptor Passivo: Puxa dados brutos advindos do ClientHandler.Java
+     * Quebra as mensagens lendo os End-Of-Line '\n' e despeja via protocolo WS para o Navegador do cliente.
+     */
     // TCP -> WebSocket
     tcpSocket.on('data', (data) => {
         const messages = data.toString().split('\n');
@@ -68,6 +93,10 @@ wss.on('connection', (ws, req) => {
         }
     });
 
+    /**
+     * Transceptor Ativo: O Navegador envia Action JSONs. 
+     * Nós injetamos o newline '\n' como delimitador e reescrevemos no pipe TCP conectado ao Backend Java.
+     */
     // WebSocket -> TCP
     ws.on('message', (message) => {
         if (tcpSocket && !tcpSocket.destroyed) {

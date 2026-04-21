@@ -2,7 +2,11 @@ package cards_against_humanity.server.event;
 
 import com.google.gson.JsonObject;
 
-// Evento imutável transportado pelo EventBus
+/**
+ * Objeto de Transporte (DTO) Imutável trafegado dentro do EventBus.
+ * Desacopla a camada de Rede isolando a Ação, a Origem (ClientId), 
+ * o UUID da Sala referida e o Payload original parseado do JSON do Browser.
+ */
 public final class GameEvent {
 
     private final EventType type;
